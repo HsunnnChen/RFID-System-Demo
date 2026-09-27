@@ -1,0 +1,2499 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="RFID 批次辨識與藥品流程追蹤系統：從藥局出庫到病房簽收的互動示範（概念模擬）">
+<title>RFID 藥品交接示範</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  :root{
+    --paper:#F5F6F8; --surface:#FFFFFF; --surface-2:#EDEFF2;
+    --line:#DDE1E6; --line-strong:#BCC3CD;
+    --ink:#1C2430; --ink-2:#434B57; --ink-3:#5B6472;
+    --primary:#1C2430; --primary-hover:#0F151D; --on-primary:#FFFFFF;
+    --accent:#0B6E7B; --accent-soft:#E8F1F2; --on-accent:#FFFFFF; --wave:#2F8A94;
+    --normal:#1F7A4D; --normal-soft:#EAF3ED;
+    --risk:#B3261E; --risk-soft:#F9ECEA;
+    --cold:#1F5FAF; --cold-soft:#EAF0F8;
+    --warn:#8F5400; --warn-soft:#F7F0E3;
+    --focus:#1C2430;
+    --shadow:0 1px 2px rgba(28,36,48,.06), 0 12px 28px -18px rgba(28,36,48,.30);
+    --radius:12px;
+    --gutter:clamp(16px, 3vw, 32px);
+    --font-body:'Noto Sans TC','PingFang TC','Microsoft JhengHei',system-ui,sans-serif;
+    --font-display:'Noto Sans TC','PingFang TC','Microsoft JhengHei',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#111418; --surface:#181C22; --surface-2:#1F242B;
+      --line:#2B313A; --line-strong:#3E4651;
+      --ink:#E6E9EE; --ink-2:#B7BDC7; --ink-3:#9AA2AE;
+      --primary:#E6E9EE; --primary-hover:#FFFFFF; --on-primary:#111418;
+      --accent:#5AAFB8; --accent-soft:#132A2D; --on-accent:#06201F; --wave:#5AAFB8;
+      --normal:#62C98E; --normal-soft:#132419;
+      --risk:#F28B84; --risk-soft:#2E1917;
+      --cold:#86B0F0; --cold-soft:#16213A;
+      --warn:#E6AE5C; --warn-soft:#2A2012;
+      --focus:#E6E9EE;
+      --shadow:0 1px 2px rgba(0,0,0,.35), 0 12px 28px -18px rgba(0,0,0,.6);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#111418; --surface:#181C22; --surface-2:#1F242B;
+      --line:#2B313A; --line-strong:#3E4651;
+      --ink:#E6E9EE; --ink-2:#B7BDC7; --ink-3:#9AA2AE;
+      --primary:#E6E9EE; --primary-hover:#FFFFFF; --on-primary:#111418;
+      --accent:#5AAFB8; --accent-soft:#132A2D; --on-accent:#06201F; --wave:#5AAFB8;
+      --normal:#62C98E; --normal-soft:#132419;
+      --risk:#F28B84; --risk-soft:#2E1917;
+      --cold:#86B0F0; --cold-soft:#16213A;
+      --warn:#E6AE5C; --warn-soft:#2A2012;
+      --focus:#E6E9EE;
+      --shadow:0 1px 2px rgba(0,0,0,.35), 0 12px 28px -18px rgba(0,0,0,.6);
+      color-scheme:dark;
+  }
+
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  html{ font-size:16px; -webkit-text-size-adjust:100%; }
+  html.presenter{ font-size:19px; }
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--font-body); font-size:1rem; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{ font:inherit; color:inherit; }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  .ic{ width:1em; height:1em; flex:none; display:inline-block; vertical-align:-0.125em; }
+  .sr-only{ position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  :focus-visible{ outline:3px solid var(--focus); outline-offset:2px; }
+  h2:focus, h3:focus, article:focus{ outline:none; }
+
+  .app{
+    max-width:1180px; margin:0 auto;
+    padding-inline:var(--gutter); padding-block:20px 48px;
+    display:flex; flex-direction:column; gap:20px;
+  }
+
+  /* ---------- top bar ---------- */
+  .topbar{ display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .brand-kicker{ margin:0 0 4px; font-size:.875rem; font-weight:700; color:var(--accent); }
+  .brand h1{
+    margin:0; font-family:var(--font-display); font-weight:800;
+    font-size:clamp(1.5rem, 1.15rem + 1.5vw, 2rem); line-height:1.2; text-wrap:balance;
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  }
+  .badge-sim{
+    font-family:var(--font-body); font-size:.8125rem; font-weight:700; line-height:1.4;
+    color:var(--warn); background:var(--warn-soft); padding:2px 8px; border-radius:5px; border:1px solid color-mix(in srgb, var(--warn) 28%, transparent);
+  }
+  .tools{ display:flex; gap:8px; flex-wrap:wrap; position:relative; }
+  .tool{
+    min-height:44px; display:inline-flex; align-items:center; gap:8px; padding:0 14px;
+    border-radius:10px; border:1px solid var(--line); background:var(--surface); color:var(--ink);
+    font-size:.9375rem; font-weight:600; cursor:pointer;
+  }
+  .tool:hover{ border-color:var(--line-strong); }
+  .tool[aria-pressed="true"]{ background:var(--primary); color:var(--on-primary); border-color:var(--primary); }
+
+  .confirm{
+    position:absolute; right:0; top:calc(100% + 8px); z-index:30;
+    width:min(340px, calc(100vw - 32px));
+    background:var(--surface); border:1px solid var(--line-strong); border-radius:var(--radius);
+    padding:16px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:12px;
+  }
+  .confirm p{ margin:0; font-size:.9375rem; color:var(--ink-2); }
+  .confirm p b{ color:var(--ink); }
+  .confirm .row{ display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+
+  /* ---------- stepper ---------- */
+  .stepper-wrap{
+    position:sticky; top:env(safe-area-inset-top, 0px); z-index:20;
+    background:var(--paper); padding-block:8px;
+    border-bottom:1px solid var(--line);
+  }
+  .stepper{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(5, minmax(0,1fr)) minmax(0,.9fr); gap:8px; }
+  @media (max-width:760px){ .stepper{ grid-template-columns:repeat(5, minmax(0,1fr)); } }
+  .stepper button{
+    width:100%; min-height:56px; display:flex; align-items:center; gap:10px;
+    padding:8px 12px; border-radius:12px; border:1px solid var(--line);
+    background:var(--surface); text-align:left; cursor:pointer;
+  }
+  .stepper button:hover{ border-color:var(--line-strong); }
+  .stepper .num{
+    flex:none; width:30px; height:30px; border-radius:50%; display:grid; place-items:center;
+    font-family:var(--font-mono); font-weight:600; font-size:.875rem;
+    background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line);
+  }
+  .stepper .num .ic{ width:16px; height:16px; }
+  .stepper .lbl{ display:flex; flex-direction:column; line-height:1.3; min-width:0; }
+  .stepper .lbl b{ font-size:.9375rem; color:var(--ink); }
+  .stepper .lbl small{ font-size:.8125rem; color:var(--ink-3); }
+  .stepper button[aria-current="step"]{ border-color:var(--primary); box-shadow:inset 0 0 0 1px var(--primary); }
+  .stepper button[aria-current="step"] .num{ background:var(--primary); color:var(--on-primary); border-color:var(--primary); }
+  .stepper button.is-done .num{ background:var(--normal-soft); color:var(--normal); border-color:transparent; }
+  @media (max-width:760px){
+    .stepper button{ flex-direction:column; justify-content:center; text-align:center; gap:4px; padding:8px 4px; }
+    .stepper .lbl small{ display:none; }
+    .stepper .lbl b{ font-size:.8125rem; }
+  }
+
+  /* ---------- step scaffolding ---------- */
+  .step{ display:flex; flex-direction:column; gap:20px; }
+  .step-head{ display:flex; flex-direction:column; gap:6px; max-width:74ch; }
+  .step-kicker{ margin:0; font-family:var(--font-mono); font-size:.8125rem; font-weight:600; color:var(--ink-3); letter-spacing:.04em; }
+  .step-head h2{
+    margin:0; font-family:var(--font-display); font-weight:800;
+    font-size:clamp(1.375rem, 1.1rem + 1vw, 1.75rem); line-height:1.25; text-wrap:balance;
+  }
+  .step-lede{ margin:0; color:var(--ink-2); line-height:1.7; }
+  .step-actions{ display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .step-actions .hint{ font-size:.875rem; color:var(--ink-3); }
+
+  .panel{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:clamp(16px, 2.2vw, 24px); display:flex; flex-direction:column; gap:14px;
+  }
+  .panel-title{ margin:0; font-size:1.0625rem; font-weight:700; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .panel-title .aside{ margin-left:auto; font-family:var(--font-mono); font-size:.875rem; font-weight:600; color:var(--ink-2); }
+  .panel-sub{ margin:-8px 0 0; font-size:.9375rem; color:var(--ink-2); }
+
+  .btn{
+    min-height:48px; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:0 20px; border-radius:12px; border:1px solid transparent;
+    font-size:1rem; font-weight:700; cursor:pointer; line-height:1.3; text-align:center;
+    transition:background-color .15s, border-color .15s, transform .08s;
+  }
+  .btn .ic{ width:18px; height:18px; }
+  .btn:active:not(:disabled):not([aria-disabled="true"]){ transform:translateY(1px); }
+  .btn-primary{ background:var(--primary); color:var(--on-primary); }
+  .btn-primary:hover:not(:disabled){ background:var(--primary-hover); }
+  .btn-rf{ background:var(--accent); color:var(--on-accent); }
+  .btn-secondary{ background:var(--surface); color:var(--ink); border-color:var(--line-strong); }
+  .btn-secondary:hover:not(:disabled){ border-color:var(--ink-3); }
+  .btn-alarm{ background:var(--surface); color:var(--risk); border-color:color-mix(in srgb, var(--risk) 50%, var(--line)); }
+  .btn-alarm:hover:not(:disabled){ background:var(--risk-soft); }
+  .btn:disabled{ background:var(--surface-2); color:var(--ink-3); border-color:var(--line); cursor:not-allowed; }
+  .btn-sm{ min-height:44px; padding:0 16px; font-size:.9375rem; }
+  .linkish{
+    align-self:flex-start; min-height:44px; padding:0 4px; border:none; background:none;
+    color:var(--ink-2); font-size:.9375rem; font-weight:600; text-decoration:underline; text-underline-offset:3px; cursor:pointer;
+  }
+
+  .cat{
+    display:inline-flex; align-items:center; gap:6px; font-size:.8125rem; font-weight:700; line-height:1.5;
+    padding:1px 8px 1px 6px; border-radius:5px; border:1px solid transparent; white-space:nowrap;
+  }
+  .cat .ic{ width:12px; height:12px; }
+  .cat-normal{ color:var(--normal); background:var(--normal-soft); border-color:color-mix(in srgb, var(--normal) 28%, transparent); }
+  .cat-risk{ color:var(--risk); background:var(--risk-soft); border-color:color-mix(in srgb, var(--risk) 28%, transparent); }
+  .cat-cold{ color:var(--cold); background:var(--cold-soft); border-color:color-mix(in srgb, var(--cold) 28%, transparent); }
+  .c-normal{ color:var(--normal); } .c-risk{ color:var(--risk); } .c-cold{ color:var(--cold); }
+
+  .pill{
+    display:inline-flex; align-items:center; gap:6px; font-size:.875rem; font-weight:700; line-height:1.5;
+    padding:1px 8px; border-radius:5px; border:1px solid transparent; white-space:nowrap;
+  }
+  .pill .ic{ width:14px; height:14px; }
+  .pill-ok{ color:var(--normal); background:var(--normal-soft); border-color:color-mix(in srgb, var(--normal) 28%, transparent); }
+  .pill-wait{ color:var(--warn); background:var(--warn-soft); border-color:color-mix(in srgb, var(--warn) 28%, transparent); }
+  .pill-alert{ color:var(--risk); background:var(--risk-soft); border-color:color-mix(in srgb, var(--risk) 28%, transparent); }
+  .pill-live{ color:var(--cold); background:var(--cold-soft); border-color:color-mix(in srgb, var(--cold) 28%, transparent); }
+
+  .empty{
+    display:flex; flex-direction:column; align-items:flex-start; gap:12px;
+    padding:28px 24px; border:1px dashed var(--line-strong); border-radius:var(--radius); background:var(--surface);
+  }
+  .empty h3{ margin:0; font-size:1.125rem; }
+  .empty p{ margin:0; color:var(--ink-2); max-width:60ch; }
+
+  /* ---------- step 1 ---------- */
+  .presets{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .presets .label{ font-size:.875rem; color:var(--ink-3); margin-right:4px; }
+  .chip-btn{
+    min-height:44px; padding:0 16px; border-radius:10px; border:1px solid var(--line-strong);
+    background:var(--surface); font-size:.9375rem; font-weight:600; cursor:pointer;
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .chip-btn:hover{ border-color:var(--ink-3); }
+  .chip-btn .note{ font-size:.8125rem; font-weight:700; color:var(--ink-3); }
+  .chip-btn[aria-pressed="true"]{ background:var(--primary); color:var(--on-primary); border-color:var(--primary); }
+  .chip-btn[aria-pressed="true"] .note{ color:inherit; opacity:.85; }
+
+  .shelf{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; }
+  @media (max-width:760px){ .shelf{ grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; } }
+  .drug > .cat{ max-width:calc(100% - 34px); white-space:normal; }
+  .drug{
+    position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:4px;
+    min-height:140px; padding:14px 14px 12px; border-radius:12px;
+    border:1.5px solid var(--line); background:var(--surface-2); text-align:left; cursor:pointer;
+    transition:border-color .15s, background-color .15s, box-shadow .15s;
+  }
+  .drug:hover{ border-color:var(--line-strong); }
+  .drug[aria-pressed="true"]{ background:var(--surface); border-color:var(--primary); box-shadow:inset 0 0 0 1px var(--primary); }
+  .drug-name{ margin-top:6px; font-family:var(--font-display); font-size:1.125rem; font-weight:700; line-height:1.3; }
+  .drug-spec{ font-family:var(--font-mono); font-size:.875rem; color:var(--ink-2); }
+  .drug-track{ margin-top:auto; padding-top:6px; font-size:.8125rem; color:var(--ink-3); display:inline-flex; align-items:center; gap:6px; }
+  .drug .pick{
+    position:absolute; top:12px; right:12px; width:26px; height:26px; border-radius:50%;
+    border:1.5px solid var(--line-strong); background:var(--surface); display:grid; place-items:center;
+  }
+  .drug .pick .ic{ width:14px; height:14px; opacity:0; }
+  .drug[aria-pressed="true"] .pick{ background:var(--primary); border-color:var(--primary); color:var(--on-primary); }
+  .drug[aria-pressed="true"] .pick .ic{ opacity:1; }
+
+  .tracks{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:680px){ .tracks{ grid-template-columns:1fr; } }
+  .track{ border:1px solid var(--line); border-radius:12px; padding:14px 16px; background:var(--paper); display:flex; flex-direction:column; gap:8px; }
+  .track h3{ margin:0; font-size:1rem; font-weight:700; display:flex; align-items:center; gap:8px; }
+  .track h3 .ic{ width:18px; height:18px; color:var(--ink-2); }
+  .track h3 .aside{ margin-left:auto; font-family:var(--font-mono); font-size:.875rem; font-weight:600; color:var(--ink-2); }
+  .track p{ margin:0; font-size:.875rem; color:var(--ink-2); }
+  .track ul{ margin:0; padding:0; list-style:none; display:flex; flex-wrap:wrap; gap:6px; }
+  .track li{ display:inline-flex; align-items:center; gap:6px; font-size:.875rem; font-weight:600; padding:4px 10px; border-radius:8px; background:var(--surface); border:1px solid var(--line); }
+  .track li .ic{ width:12px; height:12px; }
+  .track li.none{ font-weight:400; color:var(--ink-3); background:none; border:none; padding:4px 0; }
+
+  /* ---------- step 2 ---------- */
+  .race{ display:flex; flex-direction:column; gap:12px; }
+  .race-row, .race-axis{ display:grid; grid-template-columns:6.5rem minmax(0,1fr) 6.5rem; align-items:center; gap:12px; }
+  .race-label{ font-weight:700; font-size:.9375rem; }
+  .race-track{ position:relative; height:30px; border-radius:8px; background:var(--surface-2); border:1px solid var(--line); overflow:hidden; }
+  .race-fill{ position:absolute; inset:0 auto 0 0; display:flex; gap:2px; height:100%; width:100%; }
+  .seg{ display:block; height:100%; flex:none; }
+  .seg-normal{ background:var(--normal); } .seg-risk{ background:var(--risk); } .seg-cold{ background:var(--cold); }
+  .seg-rf{ background:var(--accent); border-radius:0 4px 4px 0; }
+  .race-val{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-weight:600; text-align:right; white-space:nowrap; }
+  .ticks{ position:relative; height:24px; border-top:1px solid var(--line-strong); }
+  .tick{ position:absolute; top:0; transform:translateX(-50%); padding-top:4px; font-family:var(--font-mono); font-size:.8125rem; color:var(--ink-3); line-height:1.2; }
+  .tick::before{ content:''; position:absolute; top:0; left:50%; width:1px; height:5px; background:var(--line-strong); }
+  .tick.first{ transform:none; } .tick.first::before{ left:0; }
+  .tick.last{ transform:translateX(-100%); } .tick.last::before{ left:auto; right:0; }
+  .axis-unit{ font-size:.8125rem; color:var(--ink-3); text-align:right; }
+  .legend{ display:flex; flex-wrap:wrap; gap:6px 16px; font-size:.8125rem; color:var(--ink-2); }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .legend i{ width:12px; height:12px; border-radius:3px; display:inline-block; }
+  @media (max-width:560px){
+    .race-row, .race-axis{ grid-template-columns:4.25rem minmax(0,1fr) 4.75rem; gap:8px; }
+    .race-label{ font-size:.8125rem; } .race-val{ font-size:.875rem; }
+  }
+
+  .cmp-grid{ display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); gap:16px; align-items:start; }
+  @media (max-width:800px){ .cmp-grid{ grid-template-columns:1fr; } }
+  .scan-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .scan-item{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:6px 6px 6px 12px; border:1px solid var(--line); border-radius:12px; background:var(--paper);
+  }
+  .scan-item .nm{ display:flex; align-items:center; gap:8px; font-weight:600; min-width:0; }
+  .scan-item .nm .ic{ width:12px; height:12px; }
+  .scan-btn{
+    min-height:44px; min-width:7.5rem; padding:0 14px; border-radius:10px;
+    border:1px solid var(--line-strong); background:var(--surface); font-size:.9375rem; font-weight:700; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap;
+  }
+  .scan-btn:hover:not(:disabled){ border-color:var(--ink-3); }
+  .scan-btn.done{ background:var(--normal-soft); color:var(--normal); border-color:transparent; cursor:default; }
+  .scan-btn.busy{ color:var(--ink-2); cursor:progress; }
+  .rf-box{ display:flex; flex-direction:column; gap:12px; }
+  .rf-box .btn{ align-self:stretch; min-height:56px; font-size:1.0625rem; }
+  .rf-tags{ margin:0; font-size:.9375rem; color:var(--ink-2); }
+  .rf-tags b{ color:var(--ink); }
+  .note{ margin:0; font-size:.875rem; color:var(--ink-2); line-height:1.6; }
+
+  .verdict{
+    display:grid; grid-template-columns:auto minmax(0,1fr); gap:20px; align-items:center;
+    padding:18px 22px; border-radius:var(--radius);
+    background:var(--accent-soft); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .verdict .x{ font-family:var(--font-display); font-weight:800; font-size:2.5rem; line-height:1; color:var(--accent); white-space:nowrap; }
+  .verdict .x small{ font-size:1rem; font-weight:700; margin-left:4px; }
+  .verdict p{ margin:0; }
+  .verdict .fine{ margin-top:6px; font-size:.875rem; color:var(--ink-2); }
+  .verdict.partial{ background:var(--surface-2); border-color:var(--line); grid-template-columns:1fr; }
+  @media (max-width:520px){ .verdict{ grid-template-columns:1fr; gap:10px; } }
+
+  /* ---------- step 3 ---------- */
+  .box-layout{ display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:20px; align-items:start; }
+  @media (max-width:980px){ .box-layout{ grid-template-columns:1fr; } }
+  .box-fig{ margin:0; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:12px; }
+  .box-fig svg{ display:block; width:100%; height:auto; }
+  .box-fig figcaption{ font-size:.875rem; color:var(--ink-2); padding:8px 6px 2px; display:flex; flex-wrap:wrap; gap:4px 12px; }
+  .box-fig figcaption b{ color:var(--ink); }
+
+  #box .housing{ fill:var(--surface-2); stroke:var(--line-strong); stroke-width:2; }
+  #box .cavity{ fill:var(--surface); stroke:var(--ink-3); stroke-width:2; transition:stroke .3s, stroke-width .3s; }
+  #box .glow{ fill:none; stroke:var(--accent); stroke-width:12; opacity:0; transition:opacity .4s; }
+  #box.on-shield .cavity{ stroke:var(--accent); stroke-width:3; }
+  #box.on-shield .glow{ opacity:.16; }
+  #box .ant{ fill:var(--ink-3); transition:fill .3s; }
+  #box.on-waves .ant{ fill:var(--accent); }
+  #box .t-label{ font-family:var(--font-body); font-size:14px; fill:var(--ink-3); }
+  #box .t-mono{ font-family:var(--font-mono); font-size:13px; font-weight:600; fill:var(--ink-2); }
+  #box .waves{ opacity:0; transition:opacity .4s; }
+  #box.on-waves .waves{ opacity:1; }
+  #box .waves circle{ fill:none; stroke:var(--wave); stroke-width:2.5; transform-box:view-box; opacity:0; }
+  #box.on-waves .waves circle{ animation:ping 2.4s cubic-bezier(.2,.6,.3,1) infinite; }
+  #box.on-waves .waves circle:nth-child(2){ animation-delay:.8s; }
+  #box.on-waves .waves circle:nth-child(3){ animation-delay:1.6s; }
+  @keyframes ping{ 0%{ transform:scale(.12); opacity:.9; } 100%{ transform:scale(1); opacity:0; } }
+  #box .basket{ fill:var(--paper); stroke:var(--ink-3); stroke-width:2; }
+  #box .handle{ fill:none; stroke:var(--ink-3); stroke-width:3; stroke-linecap:round; }
+  #box .item .body{ fill:var(--surface); stroke-width:2; transition:fill .25s; }
+  #box .item.c-normal .body{ stroke:var(--normal); }
+  #box .item.c-risk .body{ stroke:var(--risk); }
+  #box .item.c-cold .body{ stroke:var(--cold); }
+  #box .item .code{ font-family:var(--font-mono); font-size:14px; font-weight:600; fill:var(--ink); }
+  #box .tagmark{ fill:var(--surface); stroke:var(--ink-3); stroke-width:1.5; transition:fill .2s, stroke .2s; }
+  #box .resolved .tagmark{ fill:var(--accent); stroke:var(--accent); }
+  #box .item.resolved .body{ fill:var(--accent-soft); }
+  #box .btag .tagmark{ fill:var(--surface); }
+  #box .btag.resolved .tagmark{ fill:var(--accent); }
+  #box .btag text{ font-family:var(--font-mono); font-size:12px; font-weight:600; fill:var(--ink-2); }
+  #box .btag.resolved text{ fill:var(--on-accent); }
+  #box .led{ fill:var(--surface); stroke:var(--line-strong); stroke-width:1.5; transition:fill .3s; }
+  #box .led.on.led-ok{ fill:var(--normal); stroke:var(--normal); }
+  #box .led.on.led-cold{ fill:var(--cold); stroke:var(--cold); }
+  #box .led.on.led-risk{ fill:var(--risk); stroke:var(--risk); }
+
+  .box-side{ display:flex; flex-direction:column; gap:14px; }
+  .stages{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .stage{
+    display:grid; grid-template-columns:32px minmax(0,1fr); gap:12px; align-items:start;
+    padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:var(--surface);
+  }
+  .stage .sn{
+    width:32px; height:32px; border-radius:50%; display:grid; place-items:center;
+    font-family:var(--font-mono); font-weight:600; font-size:.875rem;
+    background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line);
+  }
+  .stage .sn .ic{ width:16px; height:16px; }
+  .stage h3{ margin:4px 0 0; font-size:1rem; font-weight:700; }
+  .stage p{ margin:4px 0 0; font-size:.9375rem; color:var(--ink-2); line-height:1.65; }
+  .stage.is-upcoming h3{ color:var(--ink-3); font-weight:600; }
+  .stage.is-upcoming p, .stage.is-done p{ display:none; }
+  .stage.is-current{ border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); }
+  .stage.is-current .sn{ background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+  .stage.is-done .sn{ background:var(--normal-soft); color:var(--normal); border-color:transparent; }
+  .readout{ border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
+  .readout-head{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-weight:700; font-size:.9375rem; }
+  .readout-head .mono{ font-weight:600; }
+  .tag-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+  .tag-list li{ display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:.875rem; padding:6px 10px; border-radius:8px; background:var(--accent-soft); }
+  .tag-list .epc{ font-family:var(--font-mono); font-weight:600; color:var(--accent); }
+  .tag-list .what{ color:var(--ink); text-align:right; }
+  .tag-list li.none{ background:none; padding:0; color:var(--ink-3); }
+  .stage-ctrl{ display:flex; gap:10px; flex-wrap:wrap; }
+  .stage-ctrl .btn-primary{ flex:1 1 14rem; }
+
+  /* ---------- step 4 ---------- */
+  .gate{
+    display:flex; align-items:center; justify-content:space-between; gap:16px 24px; flex-wrap:wrap;
+    padding:18px 22px; border-radius:var(--radius); background:var(--surface); border:1px solid var(--line);
+  }
+  .gate[data-state="ready"], .gate[data-state="released"]{ background:var(--normal-soft); border-color:color-mix(in srgb, var(--normal) 35%, transparent); }
+  .gate[data-state="alert"]{ background:var(--risk-soft); border-color:color-mix(in srgb, var(--risk) 40%, transparent); }
+  .gate[data-state="transit"]{ background:var(--accent-soft); border-color:color-mix(in srgb, var(--accent) 35%, transparent); }
+  .gate .rejected-at{ font-weight:700; color:var(--risk); display:inline-flex; align-items:center; gap:8px; }
+  .gate-main{ display:flex; flex-direction:column; gap:6px; min-width:0; flex:1 1 24rem; }
+  .gate-meta{ margin:0; font-family:var(--font-mono); font-size:.875rem; color:var(--ink-2); }
+  .gate h3{ margin:0; font-family:var(--font-display); font-size:1.3125rem; font-weight:800; line-height:1.3; }
+  .reqs{ list-style:none; margin:4px 0 0; padding:0; display:flex; flex-wrap:wrap; gap:8px; }
+  .req{ display:inline-flex; align-items:center; gap:6px; font-size:.875rem; font-weight:600; padding:3px 10px; border-radius:6px; border:1px solid var(--line); background:var(--surface); }
+  .req .ic{ width:14px; height:14px; }
+  .req.todo{ color:var(--warn); }
+  .req.done{ color:var(--normal); background:var(--surface); border-color:transparent; }
+  .req.alert{ color:var(--risk); background:var(--risk-soft); border-color:transparent; }
+  .gate .btn{ min-width:10rem; }
+  .gate .released-at{ font-weight:700; color:var(--normal); display:inline-flex; align-items:center; gap:8px; }
+
+  .res-grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:20px; align-items:start; }
+  @media (max-width:1040px){ .res-grid{ grid-template-columns:1fr; } }
+  .col{ display:flex; flex-direction:column; gap:12px; min-width:0; }
+  .col-title{ margin:0; font-size:1.0625rem; font-weight:700; display:flex; align-items:baseline; gap:8px; }
+  .col-title .count{ font-family:var(--font-mono); font-size:.875rem; color:var(--ink-3); font-weight:600; }
+
+  .act{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px 18px; display:flex; flex-direction:column; gap:12px;
+  }
+  .act[data-state="alert"]{ border-color:var(--risk); box-shadow:inset 0 0 0 1px var(--risk); }
+  .act-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+  .act h4{ margin:0; font-family:var(--font-display); font-size:1.1875rem; font-weight:800; line-height:1.3; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .act h4 .spec{ font-family:var(--font-mono); font-size:.875rem; font-weight:500; color:var(--ink-2); }
+  .act-note{ margin:0; font-size:.9375rem; color:var(--ink-2); }
+  .act-none{ margin:0; padding:16px 18px; border:1px dashed var(--line-strong); border-radius:var(--radius); color:var(--ink-2); background:var(--surface); }
+  .signs{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:480px){ .signs{ grid-template-columns:1fr; } }
+  .sign{
+    min-height:64px; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:2px;
+    padding:10px 14px; border-radius:12px; border:1.5px dashed var(--line-strong); background:var(--paper);
+    text-align:left; cursor:pointer;
+  }
+  .sign:hover:not([aria-disabled="true"]){ border-color:var(--ink-3); }
+  .sign .role{ font-size:.8125rem; color:var(--ink-3); font-weight:600; }
+  .sign .who{ font-size:1rem; font-weight:700; display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .sign[aria-pressed="true"]{ border-style:solid; border-color:transparent; background:var(--normal-soft); cursor:default; }
+  .sign[aria-pressed="true"] .who{ color:var(--normal); }
+  .sign[aria-disabled="true"]:not([aria-pressed="true"]){ cursor:not-allowed; color:var(--ink-3); }
+
+  .cold-top{ display:grid; grid-template-columns:auto minmax(0,1fr); gap:16px; align-items:center; }
+  @media (max-width:480px){ .cold-top{ grid-template-columns:1fr; } }
+  .tnow{ display:flex; flex-direction:column; gap:2px; min-width:7.5rem; }
+  .tnow .tv{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:2.125rem; font-weight:600; line-height:1.1; }
+  .tnow .tv.out{ color:var(--risk); }
+  .tnow .tr{ font-size:.875rem; color:var(--ink-2); }
+  .spark{ display:block; width:100%; height:auto; }
+  .spark .band{ fill:var(--normal-soft); }
+  .spark .gl{ stroke:var(--line-strong); stroke-width:1; stroke-dasharray:3 3; }
+  .spark .line{ fill:none; stroke:var(--cold); stroke-width:2.25; stroke-linejoin:round; stroke-linecap:round; }
+  .spark .hot{ fill:var(--risk); }
+  .spark .now{ fill:var(--cold); stroke:var(--surface); stroke-width:2; }
+  .spark .now.out{ fill:var(--risk); }
+  .spark text{ font-family:var(--font-mono); font-size:12px; fill:var(--ink-3); paint-order:stroke; stroke:var(--surface); stroke-width:3px; }
+  .clock{ display:flex; flex-direction:column; gap:6px; }
+  .clock-row{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-size:.9375rem; color:var(--ink-2); }
+  .clock-row .mono{ font-size:1.125rem; font-weight:600; color:var(--ink); }
+  .clock-bar{ height:8px; border-radius:999px; background:var(--surface-2); overflow:hidden; border:1px solid var(--line); }
+  .clock-bar i{ display:block; height:100%; background:var(--cold); transition:width 1s linear; }
+  .clock-bar i.late{ background:var(--warn); }
+  .clock-bar i.stop{ background:var(--ink-3); }
+  .clock-note{ margin:0; font-size:.8125rem; color:var(--ink-3); }
+  .act-msg{ margin:0; font-size:.9375rem; padding:10px 12px; border-radius:10px; background:var(--surface-2); color:var(--ink-2); }
+  .act-msg.alert{ background:var(--risk-soft); color:var(--risk); font-weight:600; }
+  .act-msg.ok{ background:var(--normal-soft); color:var(--normal); font-weight:600; }
+  .act-btns{ display:flex; gap:10px; flex-wrap:wrap; }
+  .act-btns .btn{ flex:1 1 11rem; }
+
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); }
+  table{ width:100%; border-collapse:collapse; font-size:.9375rem; }
+  th{ text-align:left; font-size:.8125rem; font-weight:700; color:var(--ink-3); padding:10px 14px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td{ padding:12px 14px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tbody tr:last-child td{ border-bottom:none; }
+  td .nm{ font-weight:700; display:block; }
+  td .sp{ font-family:var(--font-mono); font-size:.8125rem; color:var(--ink-2); }
+  td.num{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  td.epc{ font-family:var(--font-mono); font-size:.8125rem; color:var(--ink-2); white-space:nowrap; }
+  td.epc b{ display:block; font-family:var(--font-body); font-weight:600; color:var(--ink-3); }
+  td .pill{ white-space:normal; }
+  @media (max-width:600px){
+    thead{ display:none; }
+    tbody tr{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px 12px; padding:12px 14px; border-bottom:1px solid var(--line); }
+    tbody tr:last-child{ border-bottom:none; }
+    td{ padding:0; border:none; }
+    td.c-name{ grid-column:1 / -1; }
+    td.c-status{ justify-self:end; }
+    td.epc{ grid-column:1 / -1; display:flex; gap:8px; }
+    td.epc b{ display:inline; }
+  }
+
+  .log{ list-style:none; margin:0; padding:0; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); max-height:24rem; overflow:auto; }
+  .log li{ display:grid; grid-template-columns:auto 10px minmax(0,1fr); gap:10px; align-items:start; padding:10px 14px; border-bottom:1px solid var(--line); font-size:.9375rem; }
+  .log li:last-child{ border-bottom:none; }
+  .log time{ font-family:var(--font-mono); font-size:.8125rem; color:var(--ink-3); padding-top:2px; }
+  .log .k{ width:10px; height:10px; border-radius:50%; margin-top:8px; }
+  .k-info{ background:var(--accent); } .k-ok{ background:var(--normal); } .k-risk{ background:var(--risk); } .k-warn{ background:var(--warn); }
+  .log li.none{ display:block; color:var(--ink-3); }
+
+  /* ---------- seal ---------- */
+  .cat-seal{ color:var(--accent); background:var(--accent-soft); border-color:color-mix(in srgb, var(--accent) 28%, transparent); }
+
+  /* ---------- step 5: ward handoff (病房簽收) ---------- */
+  .route{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; }
+  @media (max-width:680px){ .route{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  .route li{ border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--surface); display:flex; flex-direction:column; gap:2px; font-size:.875rem; color:var(--ink-3); min-width:0; }
+  .route li b{ color:var(--ink-2); font-size:.9375rem; display:flex; align-items:center; gap:6px; }
+  .route li b .ic{ width:14px; height:14px; }
+  .route li .mono{ font-size:.8125rem; }
+  .route li.done{ border-color:transparent; background:var(--normal-soft); }
+  .route li.done b{ color:var(--normal); }
+  .route li.cur{ border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); }
+  .route li.cur b{ color:var(--accent); }
+  .route li.bad{ border-color:transparent; background:var(--risk-soft); }
+  .route li.bad b{ color:var(--risk); }
+  .sim{ display:flex; flex-direction:column; gap:10px; padding:14px 16px; border:1px dashed var(--line-strong); border-radius:12px; background:var(--paper); }
+  .sim h4{ margin:0; font-size:.9375rem; font-weight:700; }
+  .sim p{ margin:0; font-size:.875rem; color:var(--ink-2); }
+  .sim .row{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip-btn.warn[aria-pressed="true"]{ background:var(--risk-soft); color:var(--risk); border-color:var(--risk); }
+  .chk td.c-note{ font-size:.875rem; color:var(--ink-2); line-height:1.65; }
+  .chk td.c-name .cat{ margin-top:4px; }
+  .chk td.c-status .pill{ white-space:nowrap; }
+  @media (max-width:600px){ .chk td.c-note{ grid-column:1 / -1; } }
+
+  /* ---------- step 6: records (後台紀錄) ---------- */
+  .row-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .clear-confirm{
+    display:flex; flex-direction:column; gap:12px; padding:16px 18px; border-radius:var(--radius);
+    background:var(--surface); border:1px solid color-mix(in srgb, var(--risk) 45%, var(--line)); box-shadow:var(--shadow);
+  }
+  .clear-confirm p{ margin:0; font-size:.9375rem; color:var(--ink-2); line-height:1.7; }
+  .clear-confirm p b{ color:var(--ink); }
+  .clear-confirm .row{ display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+  .clear-done{ margin:0; padding:10px 14px; border-radius:10px; background:var(--normal-soft); color:var(--normal); font-weight:600; font-size:.9375rem; }
+  .pill-flag{ color:var(--warn); background:var(--warn-soft); border-color:color-mix(in srgb, var(--warn) 28%, transparent); }
+  .pill-void{ color:var(--ink-3); background:var(--surface-2); border-color:var(--line); }
+  .dim{ color:var(--ink-3); }
+  .stepper .rec-li{ padding-left:8px; border-left:1px solid var(--line); }
+  .stepper .rec-li .num{ background:var(--accent-soft); color:var(--accent); border-color:transparent; }
+  .stepper .rec-li button[aria-current="step"] .num{ background:var(--primary); color:var(--on-primary); }
+  @media (max-width:760px){
+    .stepper .rec-li{ grid-column:1 / -1; padding-left:0; border-left:none; }
+    .stepper .rec-li button{ flex-direction:row; min-height:40px; padding:4px 12px; }
+  }
+  .sysbar{
+    display:flex; align-items:center; justify-content:space-between; gap:8px 20px; flex-wrap:wrap;
+    padding:12px 18px; border-radius:var(--radius); background:var(--surface);
+    border:1px solid var(--line); border-left:4px solid var(--accent);
+  }
+  .sys-name{ display:inline-flex; align-items:center; gap:10px; font-weight:700; }
+  .live-dot{ width:9px; height:9px; border-radius:50%; background:var(--normal); box-shadow:0 0 0 3px var(--normal-soft); }
+  .sys-meta{ font-size:.875rem; color:var(--ink-2); }
+  .sys-meta b{ color:var(--ink); font-weight:600; }
+  .kpis{ display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; }
+  @media (max-width:760px){ .kpis{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  .kpi{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .kpi .kl{ font-size:.875rem; color:var(--ink-2); font-weight:600; }
+  .kpi .kv{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:2rem; font-weight:600; line-height:1.2; }
+  .kpi .kv.v-warn{ color:var(--warn); } .kpi .kv.v-risk{ color:var(--risk); }
+  .kpi .ks{ font-size:.8125rem; color:var(--ink-3); overflow-wrap:anywhere; }
+  .list-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px 16px; flex-wrap:wrap; }
+  .list-head .panel-sub{ margin:4px 0 0; }
+  .seg-ctrl{ display:flex; gap:8px; flex-wrap:wrap; }
+  .xtag{ display:inline-block; font-family:var(--font-body); font-size:.75rem; font-weight:700; line-height:1.5; padding:0 6px; border-radius:4px; border:1px solid var(--line-strong); color:var(--ink-3); vertical-align:2px; white-space:nowrap; }
+  .xtag.live{ color:var(--accent); border-color:color-mix(in srgb, var(--accent) 40%, transparent); background:var(--accent-soft); }
+  .bk-list tbody tr[data-rec]{ cursor:pointer; }
+  .bk-list tbody tr[data-rec]:hover > td{ background:var(--paper); }
+  .bk-list tbody tr.is-sel > td{ background:var(--surface-2); }
+  .bk-list tbody tr.is-sel > td:first-child{ box-shadow:inset 3px 0 0 var(--accent); }
+  .b-pick{ appearance:none; border:0; background:none; padding:4px 0; margin:-4px 0; font:inherit; font-family:var(--font-mono); font-weight:600; color:var(--ink); cursor:pointer; text-align:left; }
+  .b-pick:hover{ text-decoration:underline; text-underline-offset:3px; }
+  .cc{ display:inline-flex; align-items:center; gap:4px; margin-right:10px; font-family:var(--font-mono); font-size:.875rem; white-space:nowrap; }
+  .cc .ic{ width:12px; height:12px; }
+  .bk td.b-sec, .bk td.b-time{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .bk td.empty-cell{ color:var(--ink-3); text-align:center; padding:24px 14px; }
+  .rec-detail{ scroll-margin-top:96px; }
+  .rec-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px 16px; flex-wrap:wrap; }
+  .rec-head h3{ margin:0; font-size:1.375rem; font-weight:700; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .rec-head h3 .mono{ font-weight:600; }
+  .rec-meta{ margin:6px 0 0; font-size:.9375rem; color:var(--ink-2); display:flex; flex-wrap:wrap; gap:4px 16px; }
+  .rec-meta b{ color:var(--ink); font-weight:600; }
+  .sub-t{ margin:6px 0 0; font-size:.9375rem; font-weight:700; color:var(--ink-2); display:flex; align-items:baseline; gap:8px; }
+  .sub-t .count{ font-family:var(--font-mono); font-size:.8125rem; color:var(--ink-3); font-weight:600; }
+  .bk-items td.i-no{ font-family:var(--font-mono); color:var(--ink-3); width:2.5rem; }
+  .bk-items td.i-nt{ font-size:.875rem; color:var(--ink-2); line-height:1.7; min-width:14rem; }
+  .bk-items td.i-nt .mono{ color:var(--ink); }
+  .mini-spark{ display:block; width:min(240px, 100%); height:auto; margin-top:6px; }
+  .mini-spark text{ font-size:10px; }
+  .trail{ list-style:none; margin:0; padding:0; }
+  .trail li{ position:relative; display:grid; grid-template-columns:10px auto minmax(0,1fr); gap:12px; align-items:start; padding-bottom:12px; font-size:.9375rem; }
+  .trail li:not(:last-child)::before{ content:''; position:absolute; left:4px; top:18px; bottom:0; width:2px; background:var(--line); }
+  .trail .k{ width:10px; height:10px; border-radius:50%; margin-top:8px; }
+  .trail time{ font-family:var(--font-mono); font-size:.8125rem; color:var(--ink-3); padding-top:2px; }
+  @media (max-width:600px){
+    .bk-list tbody tr{ grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"id id id" "tm it sc" "st st st"; align-items:center; }
+    .bk-list td.b-id{ grid-area:id; } .bk-list td.b-st{ grid-area:st; justify-self:start; }
+    .bk-list td.b-time{ grid-area:tm; font-size:.875rem; } .bk-list td.b-items{ grid-area:it; }
+    .bk-list td.b-sec{ grid-area:sc; justify-self:end; font-size:.875rem; }
+    .bk-list tbody tr.is-sel{ background:var(--surface-2); box-shadow:inset 3px 0 0 var(--accent); }
+    .bk-list tbody tr.is-sel > td, .bk-list tbody tr[data-rec]:hover > td{ background:none; box-shadow:none; }
+    .bk-items tbody tr{ grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"no nm nm" ". ct st" ". nt nt"; align-items:center; }
+    .bk-items td.i-no{ grid-area:no; width:auto; } .bk-items td.i-nm{ grid-area:nm; }
+    .bk-items td.i-ct{ grid-area:ct; } .bk-items td.i-st{ grid-area:st; justify-self:end; }
+    .bk-items td.i-nt{ grid-area:nt; min-width:0; }
+    .bk tbody tr.empty-row{ display:block; }
+  }
+
+  /* ---------- footer ---------- */
+  .foot{ border-top:1px solid var(--line); padding-top:16px; display:flex; flex-direction:column; gap:6px; font-size:.875rem; color:var(--ink-2); }
+  .foot p{ margin:0; max-width:92ch; }
+  .foot b{ color:var(--ink); }
+  kbd{ font-family:var(--font-mono); font-size:.8125rem; padding:1px 6px; border:1px solid var(--line-strong); border-bottom-width:2px; border-radius:5px; background:var(--surface); color:var(--ink); }
+
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{ transition-duration:.01ms !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; }
+    #box.on-waves .waves circle{ animation:none !important; opacity:.4; }
+    #box .waves circle:nth-child(1){ transform:scale(.35); }
+    #box .waves circle:nth-child(2){ transform:scale(.65); }
+    #box .waves circle:nth-child(3){ transform:scale(1); }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-normal" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="currentColor"/></symbol>
+  <symbol id="i-risk" viewBox="0 0 16 16"><path d="M8 1.6 14.4 8 8 14.4 1.6 8Z" fill="currentColor"/></symbol>
+  <symbol id="i-cold" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M8 1.5v13M2.4 4.75l11.2 6.5M2.4 11.25l11.2-6.5"/></g></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.2 8.6l3 3 6.6-7.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 2.2 14.6 13.6H1.4Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 6.4v3.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="11.7" r="1" fill="currentColor"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 4.8v3.4l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-therm" viewBox="0 0 16 16"><path d="M6.4 9.2V3.4a1.6 1.6 0 0 1 3.2 0v5.8a3 3 0 1 1-3.2 0Z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="11.6" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-basket" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6.5h12l-1.3 6.3a1 1 0 0 1-1 .8H4.3a1 1 0 0 1-1-.8Z"/><path d="M5.2 6.5 7.3 2.6M10.8 6.5 8.7 2.6"/></g></symbol>
+  <symbol id="i-tag" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2.4 2.9v4.6l6.2 6.2 5-5-6.2-6.2H3a.6.6 0 0 0-.6.4Z"/><circle cx="5.4" cy="5.4" r="1.1"/></g></symbol>
+  <symbol id="i-wave" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5.3 10.7a3.8 3.8 0 0 1 0-5.4M10.7 5.3a3.8 3.8 0 0 1 0 5.4M3.2 12.8a6.8 6.8 0 0 1 0-9.6M12.8 3.2a6.8 6.8 0 0 1 0 9.6"/></g><circle cx="8" cy="8" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-present" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="2.6" width="12.4" height="8.4" rx="1.2"/><path d="M8 11v2.6M5.4 13.6h5.2"/></g></symbol>
+  <symbol id="i-reset" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5"/><path d="M3.2 2.4v2.8H6"/></g></symbol>
+  <symbol id="i-arrow-r" viewBox="0 0 16 16"><path d="M3 8h10M9.2 4.2 13 8l-3.8 3.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-arrow-l" viewBox="0 0 16 16"><path d="M13 8H3M6.8 4.2 3 8l3.8 3.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.2v9.6L12.4 8Z" fill="currentColor"/></symbol>
+  <symbol id="i-db" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="8" cy="3.8" rx="5.4" ry="2"/><path d="M2.6 3.8v8.4c0 1.1 2.4 2 5.4 2s5.4-.9 5.4-2V3.8M2.6 8c0 1.1 2.4 2 5.4 2s5.4-.9 5.4-2"/></g></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 16 16"><rect x="4" y="3.2" width="2.8" height="9.6" rx=".6" fill="currentColor"/><rect x="9.2" y="3.2" width="2.8" height="9.6" rx=".6" fill="currentColor"/></symbol>
+</svg>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <p class="brand-kicker">RFID 批次辨識與藥品流程追蹤系統</p>
+      <h1>藥品批次交接互動示範 <span class="badge-sim">概念模擬</span></h1>
+    </div>
+    <div class="tools">
+      <button type="button" class="tool" id="t-presenter" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-present"/></svg>講者模式</button>
+      <button type="button" class="tool" id="t-full" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-expand"/></svg><span id="t-full-lbl">全螢幕</span></button>
+      <button type="button" class="tool" id="t-reset" aria-expanded="false" aria-controls="reset-confirm"><svg class="ic" aria-hidden="true"><use href="#i-reset"/></svg>重新開始</button>
+      <div class="confirm" id="reset-confirm" role="dialog" aria-modal="false" aria-labelledby="reset-q" hidden>
+        <p id="reset-q"><b>要重新開始示範嗎？</b><br>藥籃會回到預設的混合批次，感應結果與系統紀錄都會清空，後台紀錄回到示範資料。</p>
+        <div class="row">
+          <button type="button" class="btn btn-secondary btn-sm" id="reset-cancel">取消</button>
+          <button type="button" class="btn btn-primary btn-sm" id="reset-go">重新開始</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="stepper-wrap" id="stepper-wrap" aria-label="示範步驟">
+    <ol class="stepper" id="stepper"></ol>
+  </nav>
+
+  <main>
+    <!-- STEP 1 -->
+    <section class="step" id="step-1" aria-labelledby="h-step-1">
+      <header class="step-head">
+        <p class="step-kicker">步驟 1 / 5</p>
+        <h2 id="h-step-1" tabindex="-1">依醫囑建立藥籃</h2>
+        <p class="step-lede">選一張病房醫囑，系統帶入這一批的藥品並自動分流：一般藥品放入可重複使用的智慧藥籃，藥籃綁定這張醫囑，整籃共用一枚標籤；高風險管制藥與冷藏藥品各貼一枚一次性標籤，逐支追溯。也可以手動點選藥品調整內容。</p>
+      </header>
+
+      <div class="presets" role="group" aria-label="選擇病房醫囑">
+        <span class="label">選擇醫囑</span>
+        <span id="presets" style="display:contents"></span>
+        <button type="button" class="chip-btn" id="clear-basket">清空藥籃</button>
+      </div>
+
+      <div class="shelf" id="shelf" role="group" aria-label="藥架"></div>
+
+      <section class="panel" aria-labelledby="basket-title">
+        <h3 class="panel-title" id="basket-title">這一批的分流結果 <span class="aside" id="basket-aside"></span></h3>
+        <div class="tracks">
+          <div class="track">
+            <h3><svg class="ic" aria-hidden="true"><use href="#i-basket"/></svg>智慧藥籃 <span class="aside" id="tr-basket-n"></span></h3>
+            <p>藥籃綁定醫囑，品項與數量由醫囑帶入。一枚藥籃標籤代表整籃常規藥品，不需逐支貼標，藥籃可重複使用。</p>
+            <ul id="tr-basket"></ul>
+          </div>
+          <div class="track">
+            <h3><svg class="ic" aria-hidden="true"><use href="#i-tag"/></svg>一次性單品標籤 <span class="aside" id="tr-tag-n"></span></h3>
+            <p>高風險管制藥與冷藏藥品逐支貼標，每一支都能單獨追溯。</p>
+            <ul id="tr-tag"></ul>
+          </div>
+        </div>
+      </section>
+
+      <div class="step-actions">
+        <span class="hint" id="s1-hint"></span>
+        <button type="button" class="btn btn-primary" id="go-2">下一步：比較掃描方式 <svg class="ic" aria-hidden="true"><use href="#i-arrow-r"/></svg></button>
+      </div>
+    </section>
+
+    <!-- STEP 2 -->
+    <section class="step" id="step-2" aria-labelledby="h-step-2" hidden>
+      <header class="step-head">
+        <p class="step-kicker">步驟 2 / 5</p>
+        <h2 id="h-step-2" tabindex="-1">逐項掃描 vs 整籃感應</h2>
+        <p class="step-lede">同一籃藥品，左邊逐支掃條碼，右邊整籃放進感應箱一次讀完。兩條橫條用同一條時間軸，長短就是實際的時間差。</p>
+      </header>
+
+      <div class="empty" id="s2-empty" hidden>
+        <h3>藥籃是空的</h3>
+        <p>先回到步驟 1 選幾項藥品，才能比較兩種方式。</p>
+        <button type="button" class="btn btn-secondary" data-go="1"><svg class="ic" aria-hidden="true"><use href="#i-arrow-l"/></svg>回到步驟 1</button>
+      </div>
+
+      <div id="s2-body" class="step" style="gap:16px">
+        <figure class="panel" style="margin:0" aria-labelledby="race-cap">
+          <div class="race" role="img" aria-labelledby="race-cap" aria-describedby="race-sum">
+            <div class="race-row">
+              <span class="race-label">逐項掃描</span>
+              <div class="race-track"><div class="race-fill" id="bar-manual"></div></div>
+              <span class="race-val" id="val-manual">0.0 秒</span>
+            </div>
+            <div class="race-row">
+              <span class="race-label">整籃感應</span>
+              <div class="race-track"><div class="race-fill" id="bar-rfid"></div></div>
+              <span class="race-val" id="val-rfid">—</span>
+            </div>
+            <div class="race-axis" aria-hidden="true">
+              <span></span>
+              <div class="ticks" id="ticks"></div>
+              <span class="axis-unit">秒</span>
+            </div>
+          </div>
+          <figcaption id="race-cap" class="legend">
+            <span><i style="background:var(--normal)"></i>一般藥品 5.4 秒/支</span>
+            <span><i style="background:var(--risk)"></i>管制藥 6.8 秒/支</span>
+            <span><i style="background:var(--cold)"></i>冷藏藥品 6.8 秒/支</span>
+            <span><i style="background:var(--accent)"></i>整籃感應（模擬）</span>
+          </figcaption>
+          <p class="sr-only" id="race-sum"></p>
+        </figure>
+
+        <div class="cmp-grid">
+          <section class="panel" aria-labelledby="manual-title">
+            <h3 class="panel-title" id="manual-title">逐項掃描條碼 <span class="aside" id="manual-progress"></span></h3>
+            <p class="panel-sub">每一支都要拿起來、對準條碼、確認。點「掃描」逐項完成。</p>
+            <ul class="scan-list" id="scan-list"></ul>
+            <button type="button" class="linkish" id="scan-rest">略過剩下的，直接累計時間</button>
+          </section>
+          <section class="panel" aria-labelledby="rf-title">
+            <h3 class="panel-title" id="rf-title">RFID 整籃感應</h3>
+            <div class="rf-box">
+              <p class="rf-tags" id="rf-tags"></p>
+              <button type="button" class="btn btn-rf" id="rfid-go"><svg class="ic" aria-hidden="true"><use href="#i-wave"/></svg><span id="rfid-go-lbl">整籃感應</span></button>
+              <p class="note">不需要逐支對準：感應箱一次讀取籃內所有標籤。</p>
+            </div>
+          </section>
+        </div>
+
+        <div class="verdict" id="verdict" role="status" hidden></div>
+      </div>
+
+      <div class="step-actions">
+        <button type="button" class="btn btn-secondary" data-go="1"><svg class="ic" aria-hidden="true"><use href="#i-arrow-l"/></svg>上一步</button>
+        <button type="button" class="btn btn-primary" data-go="3">下一步：看感應箱內部 <svg class="ic" aria-hidden="true"><use href="#i-arrow-r"/></svg></button>
+      </div>
+    </section>
+
+    <!-- STEP 3 -->
+    <section class="step" id="step-3" aria-labelledby="h-step-3" hidden>
+      <header class="step-head">
+        <p class="step-kicker">步驟 3 / 5</p>
+        <h2 id="h-step-3" tabindex="-1">感應箱裡發生了什麼</h2>
+        <p class="step-lede">把整籃放進腔體感應箱，一個階段一個階段看它怎麼在一秒內讀完所有標籤。可以手動逐步講解，也可以自動播放。</p>
+      </header>
+
+      <div class="empty" id="s3-empty" hidden>
+        <h3>藥籃是空的</h3>
+        <p>感應箱需要至少一項藥品。先回到步驟 1 建立藥籃。</p>
+        <button type="button" class="btn btn-secondary" data-go="1"><svg class="ic" aria-hidden="true"><use href="#i-arrow-l"/></svg>回到步驟 1</button>
+      </div>
+
+      <div class="box-layout" id="s3-body">
+        <figure class="box-fig">
+          <svg id="box" viewBox="0 0 560 400" role="img" aria-labelledby="box-t box-d">
+            <title id="box-t">腔體感應箱剖面示意</title>
+            <desc id="box-d">屏蔽腔體四周裝有 A1 到 A4 四組天線，藥籃放在正中央。感應時天線發射訊號，藥籃標籤與單品標籤依序被解析，完成後底部燈號亮起。</desc>
+            <defs><clipPath id="cav-clip"><rect x="46" y="46" width="468" height="282" rx="12"/></clipPath></defs>
+            <rect class="housing" x="16" y="16" width="528" height="368" rx="22"/>
+            <rect class="glow" x="44" y="44" width="472" height="286" rx="14"/>
+            <rect class="cavity" x="44" y="44" width="472" height="286" rx="14"/>
+            <text class="t-label" x="64" y="74">屏蔽腔體</text>
+            <g clip-path="url(#cav-clip)">
+              <g class="waves"><circle cx="190" cy="44" r="200" style="transform-origin:190px 44px"/><circle cx="190" cy="44" r="200" style="transform-origin:190px 44px"/><circle cx="190" cy="44" r="200" style="transform-origin:190px 44px"/></g>
+              <g class="waves"><circle cx="370" cy="44" r="200" style="transform-origin:370px 44px"/><circle cx="370" cy="44" r="200" style="transform-origin:370px 44px"/><circle cx="370" cy="44" r="200" style="transform-origin:370px 44px"/></g>
+              <g class="waves"><circle cx="44" cy="187" r="200" style="transform-origin:44px 187px"/><circle cx="44" cy="187" r="200" style="transform-origin:44px 187px"/><circle cx="44" cy="187" r="200" style="transform-origin:44px 187px"/></g>
+              <g class="waves"><circle cx="516" cy="187" r="200" style="transform-origin:516px 187px"/><circle cx="516" cy="187" r="200" style="transform-origin:516px 187px"/><circle cx="516" cy="187" r="200" style="transform-origin:516px 187px"/></g>
+            </g>
+            <rect class="ant" x="166" y="38" width="48" height="12" rx="4"/>
+            <rect class="ant" x="346" y="38" width="48" height="12" rx="4"/>
+            <rect class="ant" x="38" y="163" width="12" height="48" rx="4"/>
+            <rect class="ant" x="510" y="163" width="12" height="48" rx="4"/>
+            <text class="t-mono" x="190" y="32" text-anchor="middle">A1</text>
+            <text class="t-mono" x="370" y="32" text-anchor="middle">A2</text>
+            <text class="t-mono" x="30" y="236" text-anchor="middle">A3</text>
+            <text class="t-mono" x="530" y="236" text-anchor="middle">A4</text>
+            <path class="handle" d="M196 132 C 232 100, 328 100, 364 132"/>
+            <rect class="basket" x="128" y="132" width="304" height="182" rx="12"/>
+            <g id="btag" class="btag" hidden>
+              <rect class="tagmark" x="382" y="140" width="42" height="20" rx="4"/>
+              <text x="403" y="154.5" text-anchor="middle">BSK</text>
+            </g>
+            <g id="box-items"></g>
+            <circle class="led led-ok" cx="190" cy="357" r="7"/>
+            <text class="t-label" x="204" y="362">完成</text>
+            <circle class="led led-cold" cx="268" cy="357" r="7"/>
+            <text class="t-label" x="282" y="362">冷藏</text>
+            <circle class="led led-risk" cx="346" cy="357" r="7"/>
+            <text class="t-label" x="360" y="362">管制</text>
+          </svg>
+          <figcaption><span>狀態：<b id="box-status">待感應</b></span><span class="mono" id="box-batch"></span><span>動畫刻意放慢以便講解；整籃感應的設計目標是 1 秒內完成。</span></figcaption>
+        </figure>
+
+        <div class="box-side">
+          <ol class="stages" id="stages" aria-label="感應階段"></ol>
+          <div class="readout" aria-live="polite">
+            <div class="readout-head"><span>已解析標籤</span><span class="mono" id="tag-count"></span></div>
+            <ul class="tag-list" id="tag-list"></ul>
+          </div>
+          <div class="stage-ctrl">
+            <button type="button" class="btn btn-primary" id="stage-next"><span id="stage-next-lbl">開始感應</span> <svg class="ic" aria-hidden="true"><use href="#i-arrow-r"/></svg></button>
+            <button type="button" class="btn btn-secondary" id="stage-auto" aria-pressed="false"><svg class="ic" aria-hidden="true" id="stage-auto-ic"><use href="#i-play"/></svg><span id="stage-auto-lbl">自動播放</span></button>
+            <button type="button" class="btn btn-secondary" id="stage-again" hidden><svg class="ic" aria-hidden="true"><use href="#i-reset"/></svg>重新感應</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button type="button" class="btn btn-secondary" data-go="2"><svg class="ic" aria-hidden="true"><use href="#i-arrow-l"/></svg>上一步</button>
+        <button type="button" class="btn btn-primary" data-go="4">下一步：防呆核對 <svg class="ic" aria-hidden="true"><use href="#i-arrow-r"/></svg></button>
+      </div>
+    </section>
+
+    <!-- STEP 4 -->
+    <section class="step" id="step-4" aria-labelledby="h-step-4" hidden>
+      <header class="step-head">
+        <p class="step-kicker">步驟 4 / 5</p>
+        <h2 id="h-step-4" tabindex="-1">防呆核對、封籤與出庫</h2>
+        <p class="step-lede">感應結果寫入系統後，管制藥要兩位藥師簽核，冷藏藥品要在時限內放入藥籃保冷隔層。全部完成後貼上防拆封籤，才能出庫交給傳送人員。</p>
+      </header>
+
+      <div class="empty" id="s4-empty" hidden>
+        <h3 id="s4-empty-t">還沒有感應結果</h3>
+        <p id="s4-empty-p">到步驟 3 把藥籃放進感應箱，完成四個階段後，這裡會出現辨識清單與防呆核對。</p>
+        <button type="button" class="btn btn-secondary" id="s4-empty-go" data-go="3"><svg class="ic" aria-hidden="true"><use href="#i-arrow-l"/></svg><span id="s4-empty-btn">前往步驟 3</span></button>
+      </div>
+
+      <div id="s4-body" class="step" style="gap:20px">
+        <section class="gate" id="gate" data-state="pending" aria-labelledby="gate-title">
+          <div class="gate-main">
+            <p class="gate-meta" id="gate-meta"></p>
+            <h3 id="gate-title" aria-live="polite"></h3>
+            <ul class="reqs" id="reqs" aria-label="放行條件"></ul>
+          </div>
+          <div id="gate-action"></div>
+        </section>
+
+        <div class="res-grid">
+          <div class="col">
+            <h3 class="col-title">需要處理 <span class="count" id="act-count"></span></h3>
+            <div class="col" id="acts"></div>
+          </div>
+          <div class="col">
+            <h3 class="col-title">辨識清單 <span class="count" id="list-count"></span></h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th scope="col">藥品</th><th scope="col">類別</th><th scope="col">標籤</th><th scope="col">狀態</th></tr></thead>
+                <tbody id="res-body"></tbody>
+              </table>
+            </div>
+            <h3 class="col-title" style="margin-top:8px">系統紀錄 <span class="count">同步 HIS</span></h3>
+            <ol class="log" id="log" aria-label="系統紀錄，最新在上"></ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button type="button" class="btn btn-secondary" data-go="3"><svg class="ic" aria-hidden="true"><use href="#i-arrow-l"/></svg>上一步</button>
+        <button type="button" class="btn btn-primary" data-go="5">下一步：送達病房 <svg class="ic" aria-hidden="true"><use href="#i-arrow-r"/></svg></button>
+      </div>
+    </section>
+
+    <!-- STEP 5: ward handoff -->
+    <section class="step" id="step-5" aria-labelledby="h-step-5" hidden>
+      <header class="step-head">
+        <p class="step-kicker">步驟 5 / 5</p>
+        <h2 id="h-step-5" tabindex="-1">送達病房與簽收</h2>
+        <p class="step-lede">核對不只發生在藥局。藥籃送到病房時再讀一次：送對病房、封籤完整、管制藥是出庫時的同一支、冷鏈全程正常，護理師才能簽收。任何一項不符就拒收，退回藥局。</p>
+      </header>
+
+      <div class="empty" id="s5-empty" hidden>
+        <h3>這一批還沒出庫</h3>
+        <p>到步驟 4 完成核對、貼上封籤並出庫後，才能送到病房。</p>
+        <button type="button" class="btn btn-secondary" data-go="4"><svg class="ic" aria-hidden="true"><use href="#i-arrow-l"/></svg>回到步驟 4</button>
+      </div>
+
+      <div id="s5-body" class="step" style="gap:20px">
+        <ol class="route" id="route" aria-label="交接路徑"></ol>
+        <section class="gate" id="gate5" data-state="transit" aria-labelledby="gate5-title">
+          <div class="gate-main">
+            <p class="gate-meta" id="gate5-meta"></p>
+            <h3 id="gate5-title" aria-live="polite"></h3>
+            <p class="act-note" id="gate5-note"></p>
+          </div>
+          <div id="gate5-action"></div>
+        </section>
+        <div class="res-grid">
+          <div class="col" id="s5-main"></div>
+          <div class="col">
+            <h3 class="col-title">系統紀錄 <span class="count">同步 HIS</span></h3>
+            <ol class="log" id="log5" aria-label="系統紀錄，最新在上"></ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button type="button" class="btn btn-secondary" data-go="4"><svg class="ic" aria-hidden="true"><use href="#i-arrow-l"/></svg>上一步</button>
+        <button type="button" class="btn btn-primary" data-go="6">查看後台紀錄 <svg class="ic" aria-hidden="true"><use href="#i-arrow-r"/></svg></button>
+      </div>
+    </section>
+
+    <!-- STEP 6: records -->
+    <section class="step" id="step-6" aria-labelledby="h-step-6" hidden>
+      <header class="step-head">
+        <p class="step-kicker">後台 · 藥劑部</p>
+        <h2 id="h-step-6" tabindex="-1">後台紀錄</h2>
+        <p class="step-lede">每一批都在後台留下完整紀錄：品項與標籤、簽核人與時間、封籤、冷鏈溫度讀數，以及出庫到病房簽收的交接過程，全部寫成稽核軌跡，事後可以逐筆追溯。</p>
+      </header>
+
+      <div class="sysbar">
+        <span class="sys-name"><span class="live-dot" aria-hidden="true"></span>後台紀錄系統・藥劑部</span>
+        <span class="sys-meta">資料來源 <b>腔體感應箱 → HIS</b> · 更新時間 <span class="mono" id="rec-updated"></span></span>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+
+      <section class="panel" aria-labelledby="rec-list-title">
+        <div class="list-head">
+          <div>
+            <h3 class="panel-title" id="rec-list-title">批次點交紀錄</h3>
+            <p class="panel-sub">點選任一筆查看品項明細與稽核軌跡。標示「示範」的是預先放入的示範資料。</p>
+          </div>
+          <div class="seg-ctrl" role="group" aria-label="篩選批次" id="rec-filter"></div>
+        </div>
+        <div class="table-wrap bk">
+          <table class="bk-list">
+            <thead><tr><th scope="col">批次編號</th><th scope="col">感應時間</th><th scope="col">品項</th><th scope="col">感應耗時</th><th scope="col">處理狀態</th></tr></thead>
+            <tbody id="rec-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel rec-detail" id="rec-detail" aria-labelledby="rec-d-title"></section>
+
+      <div class="clear-confirm" id="clear-confirm" role="dialog" aria-modal="false" aria-labelledby="clear-q" hidden>
+        <p id="clear-q"><b>要清除哪些紀錄？</b><br><span id="clear-detail"></span></p>
+        <div class="row">
+          <button type="button" class="btn btn-secondary btn-sm" id="clear-cancel">取消</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="clear-go"><span id="clear-go-lbl">只清除練習紀錄</span></button>
+          <button type="button" class="btn btn-alarm btn-sm" id="clear-all"><span id="clear-all-lbl">全部清空（含示範）</span></button>
+        </div>
+      </div>
+
+      <div class="step-actions">
+        <button type="button" class="btn btn-secondary" data-go="5"><svg class="ic" aria-hidden="true"><use href="#i-arrow-l"/></svg>回到病房簽收</button>
+        <div class="row-actions">
+          <button type="button" class="btn btn-secondary" id="clear-open" aria-expanded="false" aria-controls="clear-confirm"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span id="clear-open-lbl">清除紀錄</span></button>
+          <button type="button" class="btn btn-primary" id="new-batch">建立新批次 <svg class="ic" aria-hidden="true"><use href="#i-reset"/></svg></button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p><b>概念示範：</b>本頁所有數值、辨識畫面與計時皆為模擬，不代表實體原型或實測結果。</p>
+    <p>逐項掃描的單支秒數（5.4–6.8 秒）為本團隊模擬假設值，未引用特定文獻；「整籃感應 1 秒內」是本系統的設計目標，尚待原型驗證。</p>
+    <p>一般藥品的品項與數量正確性，由調劑端既有條碼核對與醫囑負責；感應箱讀取的是藥籃標籤，封籤用來確認出庫後未被開啟。冷藏藥品放入藥籃保冷隔層後，溫度由隔層記錄器全程記錄、異常即時示警，非逐支貼溫度標籤；封籤假設使用防拆 RFID 標籤；病房端讀取與轉運流程為系統規劃示意。</p>
+    <p>鍵盤：<kbd>←</kbd> <kbd>→</kbd> 切換步驟　<kbd>P</kbd> 講者模式　<kbd>F</kbd> 全螢幕</p>
+  </footer>
+</div>
+
+<div class="sr-only" aria-live="polite" id="announcer"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ================= data ================= */
+  var CAT = {
+    normal:{ label:'一般藥品', icon:'i-normal', track:'智慧藥籃（免貼標）', trackIcon:'i-basket' },
+    risk:  { label:'高風險管制藥', icon:'i-risk', track:'一次性單品標籤', trackIcon:'i-tag' },
+    cold:  { label:'冷藏藥品', icon:'i-cold', track:'一次性單品標籤', trackIcon:'i-tag' }
+  };
+  var SHELF = [
+    { id:'apap',  code:'APAP', name:'Acetaminophen', spec:'500 mg/tab',   qty:20, cat:'normal' },
+    { id:'amox',  code:'AMOX', name:'Amoxicillin',   spec:'500 mg/cap',   qty:15, cat:'normal' },
+    { id:'ibu',   code:'IBU',  name:'Ibuprofen',     spec:'200 mg/tab',   qty:10, cat:'normal' },
+    { id:'cefa',  code:'CEFA', name:'Cefazolin',     spec:'1 g/vial',     qty:8,  cat:'normal' },
+    { id:'ns',    code:'NS',   name:'Normal Saline', spec:'500 mL/bag',   qty:6,  cat:'normal' },
+    { id:'mida',  code:'MDZ',  name:'Midazolam',     spec:'5 mg/mL inj',  qty:1,  cat:'risk' },
+    { id:'morph', code:'MOR',  name:'Morphine',      spec:'10 mg/mL inj', qty:1,  cat:'risk' },
+    { id:'ins',   code:'INS',  name:'Insulin',       spec:'100 U/mL inj', qty:2,  cat:'cold' },
+    { id:'vac',   code:'VAC',  name:'Vaccine',       spec:'0.5 mL/dose',  qty:3,  cat:'cold' }
+  ];
+  var BY_ID = {}; SHELF.forEach(function(d){ BY_ID[d.id] = d; });
+  var PRESETS = [
+    { key:'mixed',   label:'7A 病房醫囑', note:'建議示範', ward:'7A', ids:['apap','amox','mida','ins'] },
+    { key:'routine', label:'8B 病房醫囑', note:'常規', ward:'8B', ids:['apap','amox','ibu','cefa','ns'] },
+    { key:'all',     label:'9C 病房醫囑', note:'全部品項', ward:'9C', ids:SHELF.map(function(d){ return d.id; }) }
+  ];
+  var WARDS = ['6A', '7A', '8B', '9C'];
+  function otherWard(w){ var i = WARDS.indexOf(w); return WARDS[(i + 1) % WARDS.length]; }
+  var SIMS = [
+    { key:'seal', label:'途中封籤被撕開', need:null },
+    { key:'ward', label:'送到錯誤病房', need:null },
+    { key:'swap', label:'管制藥被調換', need:'risk' },
+    { key:'temp', label:'途中保冷隔層未蓋好', need:'cold' }
+  ];
+  var MANUAL_SEC = { normal:5.4, risk:6.8, cold:6.8 };
+  var COLD_LIMIT = 900;   /* real-world seconds: 15 minutes out of refrigeration */
+  var SPEEDUP = 10;       /* demo runs 10x faster */
+  var SAFE_MIN = 2, SAFE_MAX = 8, T_MAX = 15, SPARK_N = 45;
+  var STEPS = [
+    { short:'建立藥籃',   sub:'分級雙軌分流' },
+    { short:'掃描比較',   sub:'逐項 vs 整籃' },
+    { short:'感應箱內部', sub:'四個運作階段' },
+    { short:'防呆核對',   sub:'雙人核對・封籤' },
+    { short:'病房簽收',   sub:'送達・再核對' }
+  ];
+  var STAGES = [
+    { t:'屏蔽腔體啟動',   d:'箱門關閉後，金屬腔壁把電磁波留在箱內，不會誤讀箱外其他藥籃的標籤，也不干擾旁邊的設備。', next:'下一階段：天線發射' },
+    { t:'多天線同時發射', d:'A1 到 A4 四組天線從不同方向發射 UHF 訊號，並依標籤數量自動調整功率，避免漏讀或過讀。', next:'下一階段：解析標籤' },
+    { t:'防碰撞逐一解析', d:'多枚標籤同時回應時，防碰撞演算法把回應錯開，逐一解出每枚標籤的 UID。', next:'下一階段：同步 HIS' },
+    { t:'比對並同步 HIS', d:'UID 對應到藥品主檔，資料即時寫入醫院資訊系統；偵測到管制或冷藏藥品時，同步亮起提示燈號。', next:'查看防呆核對' }
+  ];
+
+  var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  var state = {
+    step:1, sel:{}, ward:'7A', cmp:null, scan:null, res:null, del:null, log:[],
+    auto:false, autoTimer:null, resolveTimer:null, rfTimer:null, ticker:null,
+    records:[], recSel:null, recFilter:'all'
+  };
+
+  /* ================= helpers ================= */
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+  function icon(id, cls){ return '<svg class="ic' + (cls ? ' ' + cls : '') + '" aria-hidden="true" focusable="false"><use href="#' + id + '"/></svg>'; }
+  function catChip(cat){ return '<span class="cat cat-' + cat + '">' + icon(CAT[cat].icon) + CAT[cat].label + '</span>'; }
+  var PILL_ICON = { ok:'i-check', wait:'i-clock', alert:'i-alert', live:'i-therm', flag:'i-alert', void:'i-x' };
+  function pill(kind, text){ return '<span class="pill pill-' + kind + '">' + icon(PILL_ICON[kind]) + text + '</span>'; }
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function clockNow(){ var d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); }
+  function mmss(sec){ sec = Math.max(0, Math.round(sec)); return pad(Math.floor(sec / 60)) + ':' + pad(sec % 60); }
+  function hex(n){ var s = ''; for(var i = 0; i < n; i++){ s += '0123456789ABCDEF'.charAt(Math.floor(Math.random() * 16)); } return s; }
+  function newBatch(){
+    /* batch ids key the back-office records, so never reuse one already on file */
+    var id, taken = function(x){ return (state.records || []).some(function(r){ return r.batch === x; }); };
+    do { id = 'BATCH-' + hex(4); } while(taken(id));
+    return id;
+  }
+  function newEpc(){ return 'E280' + hex(20); }
+  function shortEpc(e){ return e.slice(0, 4) + '…' + e.slice(-4); }
+  function basket(){ return SHELF.filter(function(d){ return state.sel[d.id]; }); }
+  function sig(){ return basket().map(function(d){ return d.id; }).join(','); }
+  function countCat(items, cat){ return items.filter(function(d){ return d.cat === cat; }).length; }
+  function tagCount(items){ var n = 0, hasNormal = false; items.forEach(function(d){ if(d.cat === 'normal') hasNormal = true; else n++; }); return n + (hasNormal ? 1 : 0); }
+  function rfidSec(items){ return Math.round((0.55 + tagCount(items) * 0.07) * 100) / 100; }
+  function manualSec(items){ return items.reduce(function(s, d){ return s + MANUAL_SEC[d.cat]; }, 0); }
+  function names(items){ return items.map(function(d){ return d.name; }).join('、'); }
+
+  function announce(text){
+    var a = $('announcer'); a.textContent = '';
+    setTimeout(function(){ a.textContent = text; }, 60);
+  }
+  function curBatch(){ return state.res ? state.res.batch : (state.scan ? state.scan.batch : null); }
+  /* every log entry is tagged with the batch it belongs to, so the back office can show one batch's audit trail */
+  function addLog(kind, text, batch){
+    state.log.unshift({ t:clockNow(), kind:kind, text:text, b:batch || curBatch() });
+    if(state.step === 4 && state.res) renderLog();
+    if(state.step === 5 && state.res) renderLogTo('log5');
+  }
+  /* keep keyboard focus on the "same" control across a re-render */
+  function keepFocus(fn){
+    var a = document.activeElement, key = a && a.getAttribute ? a.getAttribute('data-k') : null;
+    fn();
+    if(!key) return;
+    var el = document.querySelector('[data-k="' + key + '"]');
+    if(el && !el.disabled && el.getAttribute('aria-disabled') !== 'true'){ el.focus({ preventScroll:true }); return; }
+    var card = el ? el.closest('[tabindex="-1"]') : null;
+    if(card) card.focus({ preventScroll:true });
+  }
+
+  /* ================= stepper & navigation ================= */
+  function stepDone(n){
+    if(n === 1) return basket().length > 0;
+    if(n === 2) return !!(state.cmp && state.cmp.rfid != null && state.cmp.order.length === basket().length && basket().length > 0);
+    if(n === 3) return !!(state.scan && state.scan.done && state.scan.sig === sig());
+    if(n === 4) return !!(state.res && state.res.released);
+    var d = curDel();
+    return !!(d && (d.stage === 'received' || d.stage === 'rejected'));
+  }
+  function curDel(){ return (state.del && state.res && state.del.batch === state.res.batch) ? state.del : null; }
+  function renderStepper(){
+    $('stepper').innerHTML = STEPS.map(function(s, i){
+      var n = i + 1, cur = n === state.step, done = !cur && stepDone(n);
+      return '<li><button type="button" data-step="' + n + '" class="' + (done ? 'is-done' : '') + '"' + (cur ? ' aria-current="step"' : '') + '>' +
+        '<span class="num" aria-hidden="true">' + (done ? icon('i-check') : n) + '</span>' +
+        '<span class="lbl"><b>' + s.short + '</b><small>' + s.sub + '</small></span>' +
+        '<span class="sr-only">，第 ' + n + ' 步' + (done ? '，已完成' : '') + '</span></button></li>';
+    }).join('') +
+    '<li class="rec-li"><button type="button" data-step="6"' + (state.step === 6 ? ' aria-current="step"' : '') + '>' +
+      '<span class="num" aria-hidden="true">' + icon('i-db') + '</span>' +
+      '<span class="lbl"><b>後台紀錄</b><small>稽核軌跡</small></span></button></li>';
+  }
+  function goStep(n, opts){
+    n = Math.max(1, Math.min(6, n));
+    if(n !== 3) stopAuto();
+    state.step = n;
+    for(var i = 1; i <= 6; i++){ $('step-' + i).hidden = (i !== n); }
+    renderStepper();
+    if(n === 1) renderStep1();
+    if(n === 2) renderStep2();
+    if(n === 3) renderStep3();
+    if(n === 4) renderStep4();
+    if(n === 5) renderStep5();
+    if(n === 6) renderRecords();
+    var top = $('stepper-wrap').offsetTop;
+    if(window.scrollY > top) window.scrollTo(0, top);
+    if(opts && opts.focus){ var h = $('h-step-' + n); if(h) h.focus({ preventScroll:true }); }
+  }
+  function syncBasket(){
+    var s = sig();
+    if(state.cmp && state.cmp.sig !== s){ clearTimeout(state.rfTimer); state.cmp = null; }
+    if(state.scan && state.scan.sig !== s){
+      var sc = state.scan;
+      if(sc.done && !isArchived()) voidLive('藥籃內容已變更，批次 ' + sc.batch + ' 作廢，需重新感應。');
+      stopAuto(); clearTimeout(state.resolveTimer); stopTicker();
+      state.scan = null; state.res = null; state.del = null;
+    }
+  }
+
+  /* ================= step 1 ================= */
+  function buildShelf(){
+    $('shelf').innerHTML = SHELF.map(function(d){
+      return '<button type="button" class="drug" data-id="' + d.id + '" aria-pressed="false">' +
+        '<span class="pick" aria-hidden="true">' + icon('i-check') + '</span>' +
+        catChip(d.cat) +
+        '<span class="drug-name">' + d.name + '</span>' +
+        '<span class="drug-spec">' + d.spec + ' · ×' + d.qty + '</span>' +
+        '<span class="drug-track">' + icon(CAT[d.cat].trackIcon) + CAT[d.cat].track + '</span>' +
+      '</button>';
+    }).join('');
+    $('presets').innerHTML = PRESETS.map(function(p){
+      return '<button type="button" class="chip-btn" data-preset="' + p.key + '" aria-pressed="false">' + p.label +
+        (p.note ? '<span class="note">' + p.note + '</span>' : '') + '</button>';
+    }).join('');
+  }
+  function renderStep1(){
+    var items = basket();
+    Array.prototype.forEach.call($('shelf').querySelectorAll('.drug'), function(b){
+      b.setAttribute('aria-pressed', state.sel[b.getAttribute('data-id')] ? 'true' : 'false');
+    });
+    var cur = items.map(function(d){ return d.id; }).sort().join(',');
+    Array.prototype.forEach.call($('presets').querySelectorAll('[data-preset]'), function(b){
+      var p = PRESETS.filter(function(x){ return x.key === b.getAttribute('data-preset'); })[0];
+      b.setAttribute('aria-pressed', p.ids.slice().sort().join(',') === cur && p.ward === state.ward ? 'true' : 'false');
+    });
+    var normals = items.filter(function(d){ return d.cat === 'normal'; });
+    var tagged = items.filter(function(d){ return d.cat !== 'normal'; });
+    var li = function(d){ return '<li>' + icon(CAT[d.cat].icon, 'c-' + d.cat) + d.name + '</li>'; };
+    $('tr-basket').innerHTML = normals.length ? normals.map(li).join('') : '<li class="none">這一批沒有一般藥品</li>';
+    $('tr-tag').innerHTML = tagged.length ? tagged.map(li).join('') : '<li class="none">這一批沒有需要單品標籤的藥品</li>';
+    $('tr-basket-n').textContent = normals.length ? '1 枚標籤' : '0 枚標籤';
+    $('tr-tag-n').textContent = tagged.length + ' 枚標籤';
+    $('basket-aside').textContent = '目的地 ' + state.ward + ' 病房 · ' + items.length + ' 品項 · ' + tagCount(items) + ' 枚標籤';
+    $('go-2').disabled = items.length === 0;
+    $('s1-hint').textContent = items.length ? '' : '先選至少一項藥品。';
+  }
+  function toggleDrug(id){
+    state.sel[id] = !state.sel[id];
+    syncBasket(); renderStep1(); renderStepper();
+    var d = BY_ID[id];
+    announce((state.sel[id] ? '已放入 ' : '已取出 ') + d.name + '，藥籃共 ' + basket().length + ' 項');
+  }
+  function applyPreset(ids, ward){
+    var wardChanged = !!(ward && ward !== state.ward);
+    state.sel = {}; ids.forEach(function(id){ state.sel[id] = true; });
+    if(ward) state.ward = ward;
+    /* a different ward order is a different batch even if the drugs happen to match */
+    if(wardChanged && state.scan && state.scan.ward !== state.ward){
+      if(state.scan.done && !isArchived()) voidLive('改選 ' + state.ward + ' 病房醫囑，批次 ' + state.scan.batch + ' 作廢。');
+      stopAuto(); clearTimeout(state.resolveTimer); stopTicker();
+      state.cmp = null; state.scan = null; state.res = null; state.del = null;
+    }
+    syncBasket(); renderStep1(); renderStepper();
+    announce(ids.length ? '已帶入 ' + state.ward + ' 病房醫囑，藥籃共 ' + ids.length + ' 項' : '藥籃已清空');
+  }
+
+  /* ================= step 2 ================= */
+  function ensureCmp(){
+    var s = sig();
+    if(!state.cmp || state.cmp.sig !== s){ state.cmp = { sig:s, scanned:{}, order:[], manual:0, rfid:null, rfBusy:false, busy:{} }; }
+    return state.cmp;
+  }
+  function niceMax(total){
+    var step = total <= 10 ? 2 : (total <= 30 ? 5 : 10);
+    return { max:Math.max(step * 2, Math.ceil(total / step) * step), step:step };
+  }
+  function renderStep2(){
+    var items = basket();
+    $('s2-empty').hidden = items.length > 0;
+    $('s2-body').hidden = items.length === 0;
+    if(!items.length) return;
+    var c = ensureCmp();
+    var scale = niceMax(manualSec(items)), max = scale.max;
+
+    var ticks = '';
+    for(var v = 0; v <= max + 1e-9; v += scale.step){
+      var cls = v === 0 ? ' first' : (Math.abs(v - max) < 1e-9 ? ' last' : '');
+      ticks += '<span class="tick' + cls + '" style="left:' + (v / max * 100) + '%">' + v + '</span>';
+    }
+    $('ticks').innerHTML = ticks;
+
+    $('bar-manual').innerHTML = c.order.map(function(id){
+      var d = BY_ID[id];
+      return '<span class="seg seg-' + d.cat + '" style="width:calc(' + (MANUAL_SEC[d.cat] / max * 100) + '% - 2px)"></span>';
+    }).join('');
+    $('val-manual').textContent = c.manual.toFixed(1) + ' 秒';
+    if(c.rfid != null){
+      $('bar-rfid').innerHTML = '<span class="seg seg-rf" style="width:max(6px, ' + (c.rfid / max * 100) + '%)"></span>';
+      $('val-rfid').textContent = c.rfid.toFixed(2) + ' 秒';
+    } else {
+      $('bar-rfid').innerHTML = '';
+      $('val-rfid').textContent = c.rfBusy ? '感應中' : '—';
+    }
+    $('race-sum').textContent = '逐項掃描目前累計 ' + c.manual.toFixed(1) + ' 秒；整籃感應 ' + (c.rfid != null ? c.rfid.toFixed(2) + ' 秒' : '尚未執行') + '。';
+
+    $('scan-list').innerHTML = items.map(function(d){
+      var done = !!c.scanned[d.id], busy = !!c.busy[d.id];
+      var label = done ? icon('i-check') + '已掃 ' + MANUAL_SEC[d.cat].toFixed(1) + ' 秒' : (busy ? '對準條碼…' : '掃描');
+      return '<li class="scan-item"><span class="nm">' + icon(CAT[d.cat].icon, 'c-' + d.cat) + '<span>' + d.name + '</span><span class="sr-only">，' + CAT[d.cat].label + '</span></span>' +
+        '<button type="button" class="scan-btn' + (done ? ' done' : '') + (busy ? ' busy' : '') + '" data-scan="' + d.id + '" data-k="scan-' + d.id + '"' + (done || busy ? ' disabled' : '') + '>' + label + '</button></li>';
+    }).join('');
+    var left = items.length - c.order.length;
+    $('manual-progress').textContent = c.order.length + ' / ' + items.length;
+    $('scan-rest').hidden = left < 2;
+
+    var normals = countCat(items, 'normal'), tagged = items.length - normals;
+    $('rf-tags').innerHTML = '這一籃共要讀取 <b>' + tagCount(items) + ' 枚標籤</b>' +
+      (normals ? '：1 枚藥籃標籤（涵蓋 ' + normals + ' 項一般藥品）' + (tagged ? '＋' + tagged + ' 枚單品標籤。' : '。') : '：' + tagged + ' 枚單品標籤。');
+    var rb = $('rfid-go');
+    rb.disabled = c.rfid != null || c.rfBusy;
+    $('rfid-go-lbl').textContent = c.rfid != null ? '整籃感應完成' : (c.rfBusy ? '感應中…' : '整籃感應');
+
+    var v = $('verdict');
+    if(c.rfid != null && left === 0){
+      var ratio = c.manual / c.rfid;
+      v.className = 'verdict';
+      v.innerHTML = '<div class="x">約 ' + Math.round(ratio) + '<small>倍</small></div>' +
+        '<div><p>這一籃 <b>' + items.length + '</b> 項藥品：逐項掃描約 <b class="mono">' + c.manual.toFixed(1) + ' 秒</b>，整籃感應約 <b class="mono">' + c.rfid.toFixed(2) + ' 秒</b>。</p>' +
+        '<p class="fine">逐項時間依單支 5.4–6.8 秒的模擬假設值估算（未引用特定文獻）；整籃感應為模擬值，「1 秒內」是設計目標，尚待原型驗證。</p></div>';
+      v.hidden = false;
+    } else if(c.rfid != null){
+      v.className = 'verdict partial';
+      v.innerHTML = '<p>整籃感應已完成，花了 <b class="mono">' + c.rfid.toFixed(2) + ' 秒</b>。把左邊剩下的 ' + left + ' 項掃完，就能看到同一籃的完整對比。</p>';
+      v.hidden = false;
+    } else {
+      v.hidden = true;
+    }
+  }
+  function scanOne(id){
+    var c = ensureCmp();
+    if(c.scanned[id] || c.busy[id]) return;
+    c.busy[id] = true; renderStep2();
+    setTimeout(function(){
+      if(state.cmp !== c) return;
+      delete c.busy[id];
+      c.scanned[id] = true; c.order.push(id); c.manual += MANUAL_SEC[BY_ID[id].cat];
+      renderStep2(); renderStepper();
+      var next = $('scan-list').querySelector('.scan-btn:not(:disabled)');
+      (next || $('rfid-go').disabled ? (next || $('h-step-2')) : $('rfid-go')).focus({ preventScroll:true });
+      announce(BY_ID[id].name + ' 已掃描，累計 ' + c.manual.toFixed(1) + ' 秒');
+    }, reduceMotion ? 60 : 320);
+  }
+  function scanRest(){
+    var c = ensureCmp();
+    basket().forEach(function(d){ if(!c.scanned[d.id]){ c.scanned[d.id] = true; c.order.push(d.id); c.manual += MANUAL_SEC[d.cat]; delete c.busy[d.id]; } });
+    renderStep2(); renderStepper();
+    announce('逐項掃描完成，累計 ' + c.manual.toFixed(1) + ' 秒');
+  }
+  function rfidGo(){
+    var c = ensureCmp(), items = basket();
+    if(c.rfid != null || c.rfBusy) return;
+    c.rfBusy = true; renderStep2();
+    state.rfTimer = setTimeout(function(){
+      if(state.cmp !== c) return;
+      c.rfBusy = false; c.rfid = rfidSec(items);
+      renderStep2(); renderStepper();
+      announce('整籃感應完成，' + c.rfid.toFixed(2) + ' 秒，讀取 ' + tagCount(items) + ' 枚標籤');
+    }, reduceMotion ? 100 : 700);
+  }
+
+  /* ================= step 3 ================= */
+  function tagPlan(items){
+    var tags = [], normals = items.filter(function(d){ return d.cat === 'normal'; });
+    if(normals.length) tags.push({ kind:'basket', epc:newEpc(), ids:normals.map(function(d){ return d.id; }) });
+    items.forEach(function(d){ if(d.cat !== 'normal') tags.push({ kind:'item', epc:newEpc(), ids:[d.id] }); });
+    return tags;
+  }
+  function ensureScan(){
+    var s = sig();
+    if(!state.scan || state.scan.sig !== s){
+      var items = basket();
+      state.scan = { sig:s, stage:-1, done:false, resolving:false, resolved:0, batch:newBatch(), tags:tagPlan(items), sec:rfidSec(items), order:items.map(function(d){ return d.id; }), at:null,
+        ward:state.ward, bsk:'BSK-' + (100 + Math.floor(Math.random() * 900)) };
+    }
+    return state.scan;
+  }
+  function isResolved(sc, id){
+    for(var i = 0; i < sc.resolved; i++){ if(sc.tags[i].ids.indexOf(id) >= 0) return true; }
+    return false;
+  }
+  function drawBox(sc){
+    var items = basket(), svg = $('box');
+    var hasNormal = items.some(function(d){ return d.cat === 'normal'; });
+    var out = '';
+    items.forEach(function(d, i){
+      var x = 140 + (i % 3) * 94, y = 166 + Math.floor(i / 3) * 46;
+      var res = isResolved(sc, d.id) ? ' resolved' : '';
+      out += '<g class="item c-' + d.cat + res + '" transform="translate(' + x + ' ' + y + ')">' +
+        '<rect class="body" width="88" height="40" rx="8"/>' +
+        '<text class="code" x="12" y="25">' + d.code + '</text>' +
+        (d.cat !== 'normal' ? '<rect class="tagmark" x="62" y="11" width="16" height="18" rx="3"/>' : '') +
+      '</g>';
+    });
+    $('box-items').innerHTML = out;
+    var bt = $('btag');
+    if(hasNormal){ bt.removeAttribute('hidden'); } else { bt.setAttribute('hidden', ''); }
+    bt.setAttribute('class', 'btag' + (sc.tags.length && sc.tags[0].kind === 'basket' && sc.resolved > 0 ? ' resolved' : ''));
+    svg.classList.toggle('on-shield', sc.stage >= 0);
+    svg.classList.toggle('on-waves', sc.stage === 1 || sc.stage === 2);
+    var lit = sc.done;
+    svg.querySelector('.led-ok').classList.toggle('on', lit);
+    svg.querySelector('.led-cold').classList.toggle('on', lit && items.some(function(d){ return d.cat === 'cold'; }));
+    svg.querySelector('.led-risk').classList.toggle('on', lit && items.some(function(d){ return d.cat === 'risk'; }));
+    $('box-status').textContent = sc.done ? '感應完成' : (sc.stage < 0 ? '待感應' : '感應中');
+    $('box-batch').textContent = sc.batch;
+  }
+  function renderStages(sc){
+    $('stages').innerHTML = STAGES.map(function(s, i){
+      var cls = sc.done || i < sc.stage ? 'is-done' : (i === sc.stage ? 'is-current' : 'is-upcoming');
+      if(sc.done && i === STAGES.length - 1) cls = 'is-done';
+      return '<li class="stage ' + cls + '"' + (i === sc.stage && !sc.done ? ' aria-current="step"' : '') + '>' +
+        '<span class="sn" aria-hidden="true">' + (cls === 'is-done' ? icon('i-check') : (i + 1)) + '</span>' +
+        '<div><h3>' + s.t + '</h3><p>' + s.d + '</p></div></li>';
+    }).join('');
+  }
+  function renderReadout(sc){
+    var total = sc.tags.length;
+    $('tag-count').textContent = sc.resolved + ' / ' + total;
+    if(!sc.resolved){ $('tag-list').innerHTML = '<li class="none">' + (sc.stage < 2 ? '到「防碰撞逐一解析」階段才會開始解析。' : '解析中…') + '</li>'; return; }
+    var html = '';
+    for(var i = 0; i < sc.resolved; i++){
+      var t = sc.tags[i];
+      var what = t.kind === 'basket' ? '藥籃標籤 · 依醫囑 ' + t.ids.length + ' 項一般藥品' : BY_ID[t.ids[0]].name;
+      html += '<li><span class="epc" title="' + t.epc + '">' + shortEpc(t.epc) + '</span><span class="what">' + what + '</span></li>';
+    }
+    $('tag-list').innerHTML = html;
+  }
+  function renderStageCtrl(sc){
+    var nb = $('stage-next');
+    var lbl = sc.stage < 0 ? '開始感應' : (sc.done ? '查看防呆核對' : STAGES[sc.stage].next);
+    if(sc.resolving) lbl = '解析中…';
+    $('stage-next-lbl').textContent = lbl;
+    nb.disabled = sc.resolving;
+    $('stage-auto').hidden = sc.done;
+    $('stage-again').hidden = !sc.done;
+    updateAutoBtn();
+  }
+  function renderStep3(){
+    var items = basket();
+    $('s3-empty').hidden = items.length > 0;
+    $('s3-body').hidden = items.length === 0;
+    if(!items.length) return;
+    var sc = ensureScan();
+    drawBox(sc); renderStages(sc); renderReadout(sc); renderStageCtrl(sc);
+  }
+  function stageNext(){
+    var sc = ensureScan();
+    if(sc.resolving) return;
+    if(sc.done){ goStep(4, { focus:true }); return; }
+    sc.stage++;
+    if(sc.stage === 2) startResolve(sc);
+    if(sc.stage === 3) finishScan(sc);
+    renderStep3(); renderStepper();
+    announce('階段 ' + (sc.stage + 1) + '：' + STAGES[sc.stage].t + '。' + STAGES[sc.stage].d);
+  }
+  function startResolve(sc){
+    sc.resolving = true; sc.resolved = 0;
+    var gap = reduceMotion ? 150 : 480;
+    function next(){
+      if(state.scan !== sc) return;
+      if(sc.resolved >= sc.tags.length){
+        sc.resolving = false;
+        if(state.step === 3) renderStep3();
+        if(state.auto) scheduleAuto(900);
+        return;
+      }
+      sc.resolved++;
+      if(state.step === 3){ drawBox(sc); renderReadout(sc); }
+      state.resolveTimer = setTimeout(next, gap);
+    }
+    state.resolveTimer = setTimeout(next, reduceMotion ? 60 : 350);
+  }
+  function finishScan(sc){
+    sc.done = true; sc.at = clockNow();
+    state.recSel = null;   /* the back office opens on the new batch */
+    stopAuto();
+    var items = basket();
+    addLog('info', '批次 ' + sc.batch + '（' + sc.ward + ' 病房醫囑，' + sc.bsk + '）感應完成：解析 ' + sc.tags.length + ' 枚標籤、' + items.length + ' 品項（模擬 ' + sc.sec.toFixed(2) + ' 秒），已同步 HIS。');
+  }
+  function rescan(){
+    var sc = state.scan;
+    if(sc && sc.done && !isArchived()) voidLive('批次 ' + sc.batch + ' 重新感應，舊結果作廢。');
+    stopAuto(); clearTimeout(state.resolveTimer); stopTicker();
+    state.scan = null; state.res = null; state.del = null;
+    renderStep3(); renderStepper();
+    $('stage-next').focus({ preventScroll:true });
+  }
+  function scheduleAuto(delay){
+    clearTimeout(state.autoTimer);
+    state.autoTimer = setTimeout(function(){
+      if(!state.auto || state.step !== 3) return;
+      var sc = ensureScan();
+      if(sc.done){ stopAuto(); return; }
+      if(sc.resolving) return;
+      stageNext();
+      var s2 = state.scan;
+      if(state.auto && s2 && !s2.resolving && !s2.done) scheduleAuto(2200);
+    }, delay);
+  }
+  function toggleAuto(){
+    if(state.auto){ stopAuto(); return; }
+    state.auto = true; updateAutoBtn();
+    scheduleAuto(200);
+  }
+  function stopAuto(){ state.auto = false; clearTimeout(state.autoTimer); updateAutoBtn(); }
+  function updateAutoBtn(){
+    var b = $('stage-auto'); if(!b) return;
+    b.setAttribute('aria-pressed', state.auto ? 'true' : 'false');
+    $('stage-auto-lbl').textContent = state.auto ? '暫停自動播放' : '自動播放';
+    $('stage-auto-ic').innerHTML = '<use href="#' + (state.auto ? 'i-pause' : 'i-play') + '"/>';
+  }
+
+  /* ================= step 4 ================= */
+  function ensureRes(){
+    var sc = state.scan;
+    if(!sc || !sc.done || sc.sig !== sig()) return null;
+    if(!state.res || state.res.batch !== sc.batch){
+      stopTicker();
+      var items = basket();
+      var r = { sig:sc.sig, batch:sc.batch, sec:sc.sec, ward:sc.ward, bsk:sc.bsk, order:items.map(function(d){ return d.id; }), items:{}, released:null, seal:null };
+      items.forEach(function(d){
+        var tag = sc.tags.filter(function(t){ return t.ids.indexOf(d.id) >= 0; })[0];
+        var it = { epc:tag.epc, tagKind:tag.kind };
+        if(d.cat === 'risk'){ it.signA = null; it.signB = null; }
+        if(d.cat === 'cold'){
+          it.left = COLD_LIMIT; it.status = 'monitoring'; it.fault = false; it.excursion = false; it.faultOccurred = false; it.peak = null; it.stored = null;
+          it.temp = 4.3 + Math.random() * 0.6; it.hist = []; it.all = [];
+          for(var k = 0; k < 16; k++){ stepTemp(it); }
+        }
+        r.items[d.id] = it;
+      });
+      state.res = r;
+      var risks = items.filter(function(d){ return d.cat === 'risk'; });
+      var colds = items.filter(function(d){ return d.cat === 'cold'; });
+      if(risks.length) addLog('risk', names(risks) + ' 為高風險管制藥，放行前需兩位藥師簽核。');
+      if(colds.length){ addLog('info', names(colds) + ' 離開冰箱，需在 15 分鐘內放入藥籃保冷隔層，隔層記錄器將開始全程記錄溫度。'); startTicker(); }
+    }
+    return state.res;
+  }
+  function coldDone(it){ return it.status === 'stored' || it.status === 'reviewed'; }
+  function gateInfo(r){
+    var reqs = [], pending = 0;
+    r.order.forEach(function(id){
+      var d = BY_ID[id], it = r.items[id];
+      if(d.cat === 'risk'){
+        var ok = !!(it.signA && it.signB);
+        reqs.push({ st:ok ? 'done' : 'todo', text:d.name + ' 雙人核對' + (ok ? '' : '（' + ((it.signA ? 1 : 0) + (it.signB ? 1 : 0)) + '/2）') });
+        if(!ok) pending++;
+      } else if(d.cat === 'cold'){
+        var done = coldDone(it), alarm = it.excursion || it.status === 'overdue';
+        var what = (it.status === 'overdue' || it.status === 'reviewed') ? ' 主管複核' : (it.excursion ? ' 溫度異常待排除' : ' 放入保冷隔層');
+        reqs.push({ st:done ? 'done' : (alarm ? 'alert' : 'todo'), text:d.name + what });
+        if(!done) pending++;
+      }
+    });
+    var before = pending;   /* items that must be settled before the basket can be sealed */
+    reqs.push({ st:r.seal ? 'done' : 'todo', text:r.seal ? '藥籃已封籤' : '藥籃封籤' });
+    if(!r.seal) pending++;
+    return { reqs:reqs, pending:pending, beforeSeal:before };
+  }
+  function renderGate(){
+    var r = state.res, g = gateInfo(r), gate = $('gate');
+    var st = r.released ? 'released' : (g.pending === 0 ? 'ready' : 'pending');
+    gate.setAttribute('data-state', st);
+    $('gate-meta').textContent = r.batch + ' · ' + r.bsk + ' → ' + r.ward + ' 病房 · 整籃感應 ' + r.sec.toFixed(2) + ' 秒（模擬）· ' + r.order.length + ' 品項';
+    var title;
+    if(st === 'released') title = '已出庫，交給傳送人員';
+    else if(st === 'ready') title = '核對與封籤完成，可以出庫';
+    else title = '出庫前還有 ' + g.pending + ' 項待處理';
+    $('gate-title').textContent = title;
+    var reqHtml = g.reqs.map(function(q){
+      return '<li class="req ' + q.st + '">' + icon(q.st === 'done' ? 'i-check' : (q.st === 'alert' ? 'i-alert' : 'i-clock')) + q.text + '</li>';
+    }).join('');
+    var normals = r.order.filter(function(id){ return BY_ID[id].cat === 'normal'; }).length;
+    if(normals) reqHtml = '<li class="req done">' + icon('i-check') + normals + ' 項一般藥品：藥籃標籤已讀取（依醫囑）</li>' + reqHtml;
+    $('reqs').innerHTML = reqHtml;
+    $('gate-action').innerHTML = r.released
+      ? '<span class="released-at">' + icon('i-check') + '出庫 <span class="mono">' + r.released + '</span> · 已同步 HIS</span>'
+      : '<button type="button" class="btn btn-primary" id="release" data-k="release"' + (st === 'ready' ? '' : ' disabled aria-describedby="gate-title"') + '>出庫交給傳送人員</button>';
+  }
+  function riskCard(d, it, released){
+    var n = (it.signA ? 1 : 0) + (it.signB ? 1 : 0), done = n === 2;
+    function sb(who, role, person){
+      var at = it['sign' + who];
+      return '<button type="button" class="sign" data-sign="' + who + '" data-id="' + d.id + '" data-k="sign-' + d.id + '-' + who + '" aria-pressed="' + (at ? 'true' : 'false') + '"' + (at || released ? ' aria-disabled="true"' : '') + '>' +
+        '<span class="role">' + role + '</span>' +
+        '<span class="who">' + (at ? icon('i-check') + person + ' 已簽核 <span class="mono">' + at + '</span>' : person + ' 簽核') + '</span></button>';
+    }
+    return '<article class="act" data-state="' + (done ? 'done' : 'wait') + '" id="act-' + d.id + '" tabindex="-1" aria-labelledby="actt-' + d.id + '">' +
+      '<div class="act-head">' + catChip('risk') + (done ? pill('ok', '雙人核對完成') : pill('wait', '待雙人核對 ' + n + '/2')) + '</div>' +
+      '<h4 id="actt-' + d.id + '">' + d.name + ' <span class="spec">' + d.spec + ' · ×' + d.qty + '</span></h4>' +
+      '<p class="act-note">兩位藥師分別核對品項與數量後簽核，系統記錄簽核人與時間，缺一不能放行。</p>' +
+      '<div class="signs">' + sb('A', '第一核對人', '藥師 A') + sb('B', '第二核對人', '藥師 B') + '</div>' +
+    '</article>';
+  }
+  function coldView(d, it, released){
+    var v = { card:'wait', pill:pill('live', '監控中'), msgCls:'', msg:'保冷隔層記錄器每秒記錄溫度，資料即時同步 HIS，溫度異常立即示警。', btns:'' };
+    if(it.status === 'stored'){
+      v.card = 'done'; v.pill = pill('ok', it.faultOccurred ? '已放入保冷隔層・需加註' : '已放入保冷隔層');
+      v.msgCls = 'ok'; v.msg = '離開冰箱 ' + it.stored + ' 後放入藥籃保冷隔層' + (it.faultOccurred ? '；過程曾發生溫度異常，紀錄已加註待複核。' : '，溫度在安全範圍內。') + '標籤會持續記錄到病房簽收。';
+    } else if(it.status === 'reviewed'){
+      v.card = 'done'; v.pill = pill('ok', '主管已複核');
+      v.msgCls = 'ok'; v.msg = '冷鏈逾時已由主管複核，判定結果寫入紀錄。';
+    } else if(it.status === 'overdue'){
+      v.card = 'alert'; v.pill = pill('alert', '逾時未放入保冷');
+      v.msgCls = 'alert'; v.msg = '超過 15 分鐘冷鏈時限仍未放入保冷隔層，系統鎖住出庫，需主管複核這批藥品是否可用。';
+      v.btns = '<button type="button" class="btn btn-primary" data-cold="review" data-id="' + d.id + '" data-k="cold-review-' + d.id + '">主管複核完成</button>';
+    } else if(it.excursion){
+      v.card = 'alert'; v.pill = pill('alert', it.fault ? '溫度異常' : '溫度回降中');
+      v.msgCls = 'alert';
+      v.msg = it.fault
+        ? '溫度 ' + it.temp.toFixed(1) + '°C，超出 2–8°C。系統已亮紅燈、發出提示音並通知值班藥師；排除前不能放入保冷隔層。'
+        : '異常已處理，溫度正在回到安全範圍（目前 ' + it.temp.toFixed(1) + '°C）。';
+      v.btns = it.fault ? '<button type="button" class="btn btn-primary" data-cold="fix" data-id="' + d.id + '" data-k="cold-fix-' + d.id + '">已處理異常（移回保冷區）</button>' : '';
+    } else if(it.fault){
+      v.pill = pill('live', '溫度上升中');
+      v.msg = '模擬情境：藥品暫放在工作台上，沒有放回保冷區，溫度開始上升。看系統何時發現。';
+      v.btns = '<button type="button" class="btn btn-alarm" disabled>溫度上升中…</button>';
+    } else {
+      if(it.faultOccurred) v.msg = '溫度已回到安全範圍。這支藥品曾發生溫度異常，紀錄會加註待複核。';
+      v.btns = '<button type="button" class="btn btn-alarm" data-cold="fault" data-id="' + d.id + '" data-k="cold-fault-' + d.id + '">' + icon('i-alert') + '模擬溫度異常</button>' +
+               '<button type="button" class="btn btn-primary" data-cold="store" data-id="' + d.id + '" data-k="cold-store-' + d.id + '">確認已放入保冷隔層</button>';
+    }
+    if(released) v.btns = '';
+    return v;
+  }
+  function sparkInner(it){
+    var W = 300, y = function(t){ return 88 - t / T_MAX * 80; };
+    var h = it.hist, dx = (W - 10) / (SPARK_N - 1), off = SPARK_N - h.length;
+    var xs = function(i){ return (off + i) * dx + 5; };
+    var s = '<rect class="band" x="0" y="' + y(SAFE_MAX).toFixed(1) + '" width="' + W + '" height="' + (y(SAFE_MIN) - y(SAFE_MAX)).toFixed(1) + '"/>' +
+      '<line class="gl" x1="0" x2="' + W + '" y1="' + y(SAFE_MAX).toFixed(1) + '" y2="' + y(SAFE_MAX).toFixed(1) + '"/>' +
+      '<line class="gl" x1="0" x2="' + W + '" y1="' + y(SAFE_MIN).toFixed(1) + '" y2="' + y(SAFE_MIN).toFixed(1) + '"/>' +
+      '<text x="4" y="' + (y(SAFE_MAX) - 5).toFixed(1) + '">8°C</text>' +
+      '<text x="4" y="' + (y(SAFE_MIN) + 15).toFixed(1) + '">2°C</text>';
+    if(h.length){
+      s += '<polyline class="line" points="' + h.map(function(t, i){ return xs(i).toFixed(1) + ',' + y(t).toFixed(1); }).join(' ') + '"/>';
+      h.forEach(function(t, i){ if(t > SAFE_MAX || t < SAFE_MIN) s += '<circle class="hot" cx="' + xs(i).toFixed(1) + '" cy="' + y(t).toFixed(1) + '" r="2.6"/>'; });
+      var last = h[h.length - 1], out = last > SAFE_MAX || last < SAFE_MIN;
+      s += '<circle class="now' + (out ? ' out' : '') + '" cx="' + xs(h.length - 1).toFixed(1) + '" cy="' + y(last).toFixed(1) + '" r="4.5"/>';
+    }
+    return s;
+  }
+  function clockParts(it){
+    var pct = it.left / COLD_LIMIT * 100;
+    var cls = coldDone(it) ? 'stop' : (pct < 30 ? 'late' : '');
+    var label = coldDone(it) ? '離開冰箱時限（已停止）' : (it.status === 'overdue' ? '離開冰箱時限已過' : '離開冰箱時限剩餘');
+    return { pct:pct, cls:cls, label:label };
+  }
+  function coldCard(d, it, released){
+    var v = coldView(d, it, released), cp = clockParts(it), out = it.temp > SAFE_MAX || it.temp < SAFE_MIN;
+    return '<article class="act" data-state="' + v.card + '" id="act-' + d.id + '" tabindex="-1" aria-labelledby="actt-' + d.id + '">' +
+      '<div class="act-head">' + catChip('cold') + v.pill + '</div>' +
+      '<h4 id="actt-' + d.id + '">' + d.name + ' <span class="spec">' + d.spec + ' · ×' + d.qty + '</span></h4>' +
+      '<div class="cold-top">' +
+        '<div class="tnow"><span class="tv' + (out ? ' out' : '') + '" id="tv-' + d.id + '">' + it.temp.toFixed(1) + '°C</span><span class="tr">安全範圍 2–8°C</span></div>' +
+        '<svg class="spark" id="sp-' + d.id + '" viewBox="0 0 300 96" role="img" aria-label="近 45 次溫度讀數趨勢，綠色帶為 2 到 8°C 安全範圍">' + sparkInner(it) + '</svg>' +
+      '</div>' +
+      '<div class="clock">' +
+        '<div class="clock-row"><span id="cll-' + d.id + '">' + cp.label + '</span><span class="mono" id="cl-' + d.id + '">' + mmss(it.left) + '</span></div>' +
+        '<div class="clock-bar" aria-hidden="true"><i id="cb-' + d.id + '" class="' + cp.cls + '" style="width:' + cp.pct + '%"></i></div>' +
+        '<p class="clock-note">離開冰箱後 15 分鐘內要放入保冷隔層，示範加速 10 倍：畫面上 1 秒代表 10 秒。</p>' +
+      '</div>' +
+      '<p class="act-msg ' + v.msgCls + '" id="msg-' + d.id + '">' + v.msg + '</p>' +
+      (v.btns ? '<div class="act-btns">' + v.btns + '</div>' : '') +
+    '</article>';
+  }
+  function sealCard(r){
+    var g = gateInfo(r), sealed = !!r.seal, waiting = g.beforeSeal > 0;
+    var normals = r.order.filter(function(id){ return BY_ID[id].cat === 'normal'; }).length;
+    var body;
+    if(sealed){
+      body = '<p class="act-msg ok">已封籤 <span class="mono">' + r.seal.at + '</span> · 封籤標籤 <span class="mono" title="' + r.seal.epc + '">' + shortEpc(r.seal.epc) + '</span>。之後藥籃內容不得再變動。</p>';
+    } else {
+      body = (waiting ? '<p class="act-msg">管制藥與冷藏藥品處理完成後才能封籤（還有 ' + g.beforeSeal + ' 項）。</p>' : '') +
+        '<div class="act-btns"><button type="button" class="btn btn-primary" id="seal-go" data-k="seal"' + (waiting || r.released ? ' disabled' : '') + '>' + icon('i-tag') + '貼上封籤</button></div>';
+    }
+    return '<article class="act" data-state="' + (sealed ? 'done' : 'wait') + '" id="act-seal" tabindex="-1" aria-labelledby="actt-seal">' +
+      '<div class="act-head"><span class="cat cat-seal">' + icon('i-tag') + '防拆封籤</span>' + (sealed ? pill('ok', '已封籤') : pill('wait', '待封籤')) + '</div>' +
+      '<h4 id="actt-seal">藥籃封籤 <span class="spec">' + r.bsk + '</span></h4>' +
+      '<p class="act-note">核對完成後貼在籃蓋接縫上。封籤一撕開就讀不到，病房端讀到完整封籤，代表' + (normals ? '這 ' + normals + ' 項一般藥品' : '藥籃內容') + '出庫後沒有被動過。</p>' +
+      body +
+    '</article>';
+  }
+  function renderActs(){
+    var r = state.res, html = '', n = 0;
+    r.order.forEach(function(id){
+      var d = BY_ID[id], it = r.items[id];
+      if(d.cat === 'risk'){ html += riskCard(d, it, r.released); n++; }
+      if(d.cat === 'cold'){ html += coldCard(d, it, r.released); n++; }
+    });
+    html += sealCard(r); n++;
+    $('acts').innerHTML = html;
+    $('act-count').textContent = n + ' 項';
+  }
+  function statusCell(d, it, released){
+    if(d.cat === 'normal') return pill('ok', released ? '已封籤出庫' : '藥籃已讀取');
+    if(d.cat === 'risk'){
+      var n = (it.signA ? 1 : 0) + (it.signB ? 1 : 0);
+      if(released) return pill('ok', '已出庫');
+      return n === 2 ? pill('ok', '雙人核對完成') : pill('wait', '待雙人核對 ' + n + '/2');
+    }
+    if(released) return pill('ok', '已出庫');
+    if(it.status === 'stored') return pill('ok', it.faultOccurred ? '已放入保冷・需加註' : '已放入保冷隔層');
+    if(it.status === 'reviewed') return pill('ok', '主管已複核');
+    if(it.status === 'overdue') return pill('alert', '逾時未放入保冷');
+    if(it.excursion) return pill('alert', '溫度異常');
+    return pill('live', '監控中 <span class="mono" id="tc-' + d.id + '">' + mmss(it.left) + '</span>');
+  }
+  function renderTable(){
+    var r = state.res;
+    $('res-body').innerHTML = r.order.map(function(id){
+      var d = BY_ID[id], it = r.items[id];
+      return '<tr><td class="c-name"><span class="nm">' + d.name + '</span><span class="sp">' + d.spec + ' · ×' + d.qty + '</span></td>' +
+        '<td>' + catChip(d.cat) + '</td>' +
+        '<td class="epc"><b>' + (it.tagKind === 'basket' ? '藥籃標籤・依醫囑' : '單品標籤') + '</b><span title="' + it.epc + '">' + shortEpc(it.epc) + '</span></td>' +
+        '<td class="c-status">' + statusCell(d, it, !!r.released) + '</td></tr>';
+    }).join('');
+    $('list-count').textContent = r.order.length + ' 品項';
+  }
+  function renderLog(){ renderLogTo('log'); }
+  function renderLogTo(elId){
+    var el = $(elId), b = state.res ? state.res.batch : null;
+    var entries = state.log.filter(function(e){ return e.b === b; });
+    if(!entries.length){ el.innerHTML = '<li class="none">還沒有紀錄。完成感應後，每個核對動作都會寫進這裡。</li>'; return; }
+    el.innerHTML = entries.map(function(e){
+      return '<li><time class="mono">' + e.t + '</time><span class="k k-' + e.kind + '" aria-hidden="true"></span><span>' + esc(e.text) + '</span></li>';
+    }).join('');
+  }
+  function renderStep4(){
+    var r = ensureRes();
+    $('s4-empty').hidden = !!r;
+    $('s4-body').hidden = !r;
+    if(!r){
+      var empty = basket().length === 0;
+      $('s4-empty-t').textContent = empty ? '藥籃是空的' : '還沒有感應結果';
+      $('s4-empty-p').textContent = empty ? '先回到步驟 1 選藥品，再到步驟 3 完成感應。' : '到步驟 3 把藥籃放進感應箱，完成四個階段後，這裡會出現辨識清單與防呆核對。';
+      $('s4-empty-btn').textContent = empty ? '回到步驟 1' : '前往步驟 3';
+      $('s4-empty-go').setAttribute('data-go', empty ? '1' : '3');
+      return;
+    }
+    keepFocus(function(){ renderGate(); renderActs(); renderTable(); renderLog(); });
+  }
+  function rerender4(){
+    if(state.step === 4 && state.res){ keepFocus(function(){ renderGate(); renderActs(); renderTable(); renderLog(); }); }
+    if(state.step === 5) renderStep5();
+    if(state.step === 6) renderRecords();
+    renderStepper();
+  }
+
+  /* ----- cold chain simulation ----- */
+  function stepTemp(it){
+    var t = it.temp, target = it.fault ? 12.6 : 4.6;
+    if(it.fault) t += (target - t) * 0.35 + (Math.random() - 0.5) * 0.3;
+    else if(t > 6.4) t += (target - t) * 0.42 + (Math.random() - 0.5) * 0.2;
+    else t += (target - t) * 0.15 + (Math.random() - 0.5) * 0.5;
+    it.temp = Math.max(1.6, Math.min(14.6, t));
+    it.hist.push(it.temp);
+    if(it.hist.length > SPARK_N) it.hist.shift();
+    it.all.push(Math.round(it.temp * 10) / 10);   /* full record kept for the back office */
+    if(it.all.length > 1200) it.all.shift();
+  }
+  function startTicker(){ stopTicker(); state.ticker = setInterval(tick, 1000); }
+  function stopTicker(){ clearInterval(state.ticker); state.ticker = null; }
+  function tick(){
+    var r = state.res;
+    if(!r || r.released){ stopTicker(); return; }
+    var structural = false, active = false;
+    r.order.forEach(function(id){
+      var d = BY_ID[id]; if(d.cat !== 'cold') return;
+      var it = r.items[id];
+      if(coldDone(it)) return;
+      active = true;
+      stepTemp(it);
+      if(it.status === 'monitoring'){
+        it.left -= SPEEDUP;
+        if(it.left <= 0){
+          it.left = 0; it.status = 'overdue'; it.fault = false;
+          addLog('risk', d.name + ' 離開冰箱超過 15 分鐘仍未放入保冷隔層，出庫已鎖定，需主管複核。');
+          announce(d.name + ' 冷鏈逾時，需主管複核');
+          structural = true;
+        }
+      }
+      if(!it.excursion && it.temp > SAFE_MAX){
+        it.excursion = true; it.peak = it.temp;
+        addLog('risk', d.name + ' 溫度 ' + it.temp.toFixed(1) + '°C 超出 2–8°C，已亮紅燈、發出提示音並通知值班藥師。');
+        announce('警示：' + d.name + ' 溫度 ' + it.temp.toFixed(1) + ' 度，超出安全範圍');
+        structural = true;
+      } else if(it.excursion){
+        it.peak = Math.max(it.peak, it.temp);
+        if(!it.fault && it.temp <= SAFE_MAX - 0.6){
+          it.excursion = false; it.faultOccurred = true;
+          addLog('ok', d.name + ' 溫度回到安全範圍（' + it.temp.toFixed(1) + '°C，最高曾達 ' + it.peak.toFixed(1) + '°C），紀錄需加註複核。');
+          announce(d.name + ' 溫度已回到安全範圍');
+          structural = true;
+        }
+      }
+    });
+    if(structural) rerender4();
+    else if(state.step === 4) updateColdLive();
+    else if(state.step === 6) renderRecords();
+    if(!active) stopTicker();
+  }
+  function updateColdLive(){
+    var r = state.res; if(!r) return;
+    r.order.forEach(function(id){
+      var d = BY_ID[id]; if(d.cat !== 'cold') return;
+      var it = r.items[id], out = it.temp > SAFE_MAX || it.temp < SAFE_MIN;
+      var tv = $('tv-' + id); if(!tv) return;
+      tv.textContent = it.temp.toFixed(1) + '°C'; tv.classList.toggle('out', out);
+      $('sp-' + id).innerHTML = sparkInner(it);
+      var cp = clockParts(it);
+      $('cl-' + id).textContent = mmss(it.left);
+      $('cll-' + id).textContent = cp.label;
+      var bar = $('cb-' + id); bar.style.width = cp.pct + '%'; bar.className = cp.cls;
+      var tc = $('tc-' + id); if(tc) tc.textContent = mmss(it.left);
+      if(it.excursion){ var m = $('msg-' + id); if(m) m.textContent = coldView(d, it, false).msg; }
+    });
+  }
+  function coldAction(kind, id){
+    var r = state.res; if(!r || r.released) return;
+    var d = BY_ID[id], it = r.items[id];
+    if(kind === 'fault' && it.status === 'monitoring' && !it.fault){
+      it.fault = true;
+      addLog('warn', '模擬情境：' + d.name + ' 暫放在工作台上，沒有放回保冷區。');
+    } else if(kind === 'fix' && it.fault){
+      it.fault = false;
+      addLog('info', d.name + ' 異常已處理（移回保冷區），等待溫度回到安全範圍。');
+    } else if(kind === 'store' && it.status === 'monitoring' && !it.fault && !it.excursion){
+      it.status = 'stored'; it.stored = mmss(COLD_LIMIT - it.left);
+      addLog('ok', d.name + ' 已放入藥籃保冷隔層（離開冰箱 ' + it.stored + '）' + (it.faultOccurred ? '，紀錄加註：曾發生溫度異常。' : '，溫度正常。'));
+      announce(d.name + ' 已放入保冷隔層');
+    } else if(kind === 'review' && it.status === 'overdue'){
+      it.status = 'reviewed';
+      addLog('ok', '主管已複核 ' + d.name + ' 的冷鏈逾時，判定結果寫入紀錄。');
+    } else { return; }
+    rerender4();
+  }
+  function sign(id, who){
+    var r = state.res; if(!r || r.released) return;
+    var d = BY_ID[id], it = r.items[id];
+    if(it['sign' + who]) return;
+    it['sign' + who] = clockNow();
+    var both = it.signA && it.signB;
+    addLog(both ? 'ok' : 'info', both ? d.name + ' 完成雙人核對（藥師 A、藥師 B）。' : d.name + ' ' + (who === 'A' ? '第一' : '第二') + '核對人藥師 ' + who + ' 已簽核。');
+    announce(both ? d.name + ' 雙人核對完成' : '藥師 ' + who + ' 已簽核，還需要另一位藥師');
+    rerender4();
+  }
+  function sealBasket(){
+    var r = state.res; if(!r || r.released || r.seal) return;
+    if(gateInfo(r).beforeSeal) return;
+    r.seal = { epc:newEpc(), at:clockNow() };
+    addLog('ok', '藥籃 ' + r.bsk + ' 已貼上防拆封籤（' + shortEpc(r.seal.epc) + '），封籤後內容不得再變動。');
+    announce('藥籃已封籤，可以出庫');
+    rerender4();
+    var b = $('release'); if(b && !b.disabled) b.focus({ preventScroll:true });
+  }
+  function release(){
+    var r = state.res; if(!r || r.released) return;
+    if(gateInfo(r).pending) return;
+    r.released = clockNow();
+    stopTicker();
+    addLog('ok', '批次 ' + r.batch + ' 出庫，' + r.order.length + ' 品項的核對紀錄已同步 HIS。');
+    addLog('info', '藥籃 ' + r.bsk + ' 交給傳送人員 A，目的地 ' + r.ward + ' 病房。');
+    state.del = { batch:r.batch, ward:r.ward, stage:'transit', outAt:r.released, sim:{ seal:false, ward:false, swap:false, temp:false },
+                  readAt:null, readWard:null, checks:null, readUid:{}, transit:{}, doneAt:null };
+    r.archived = true;
+    upsertRecord(buildSnapshot(state.scan, r, false));   /* the batch now lives in the back office; updated again at the ward */
+    announce('批次 ' + r.batch + ' 已出庫，送往 ' + r.ward + ' 病房');
+    rerender4();
+    $('gate-title').setAttribute('tabindex', '-1');
+    $('gate-title').focus({ preventScroll:true });
+  }
+  function upsertRecord(rec){
+    var i = -1;
+    state.records.forEach(function(x, k){ if(x.batch === rec.batch) i = k; });
+    if(i >= 0) state.records[i] = rec; else state.records.unshift(rec);
+  }
+
+  /* ================= step 5: ward handoff ================= */
+  function transitTemps(startT, hot){
+    var out = [], t = startT, n = 36, i;
+    for(i = 0; i < n; i++){
+      var p = i / (n - 1);
+      if(hot && p > 0.3) t = 4.8 + 6.4 * Math.min(1, (p - 0.3) / 0.35) + (Math.random() - 0.5) * 0.4;
+      else t += (4.6 - t) * 0.2 + (Math.random() - 0.5) * 0.5;
+      t = Math.max(1.8, Math.min(14.6, t));
+      out.push(Math.round(t * 10) / 10);
+    }
+    return out;
+  }
+  function arrive(){
+    var r = state.res, del = curDel(); if(!r || !del || del.stage !== 'transit') return;
+    var sim = del.sim, items = r.order.map(function(id){ return BY_ID[id]; });
+    var normals = countCat(items, 'normal');
+    del.stage = 'arrived'; del.readAt = clockNow();
+    del.readWard = sim.ward ? otherWard(del.ward) : del.ward;
+    if(sim.seal) addLog('warn', '模擬情境：轉運途中藥籃封籤被撕開。');
+    if(sim.ward) addLog('warn', '模擬情境：傳送人員把藥籃送到 ' + del.readWard + ' 病房。');
+    if(sim.swap) addLog('warn', '模擬情境：轉運途中管制藥被調換。');
+    if(sim.temp) addLog('warn', '模擬情境：轉運途中保冷隔層沒有蓋好。');
+    addLog('info', '藥籃 ' + r.bsk + ' 送達 ' + del.readWard + ' 病房，完成感應讀取。');
+
+    var checks = [];
+    var wardOk = !sim.ward;
+    checks.push({ key:'ward', name:'送達病房', ok:wardOk,
+      text: wardOk ? '讀取地點 ' + del.readWard + ' 病房，與醫囑目的地相符。' : '讀取地點是 ' + del.readWard + ' 病房，這一籃的目的地是 ' + del.ward + ' 病房。' });
+    var sealOk = !sim.seal;
+    checks.push({ key:'seal', name:'藥籃封籤', ok:sealOk,
+      text: sealOk ? '封籤完整（' + shortEpc(r.seal.epc) + '）：' + (normals ? normals + ' 項一般藥品' : '藥籃內容') + '出庫後沒有被開啟。'
+                   : '讀不到封籤，藥籃曾被開啟：' + (normals ? normals + ' 項一般藥品的內容無法保證，' : '') + '需退回藥局重新核對。' });
+    var swapped = false;
+    items.forEach(function(d){
+      var it = r.items[d.id];
+      if(d.cat === 'risk'){
+        var swap = sim.swap && !swapped; if(swap) swapped = true;
+        del.readUid[d.id] = swap ? newEpc() : it.epc;
+        checks.push({ key:'uid', id:d.id, name:d.name, cat:'risk', ok:!swap,
+          text: swap ? '讀到 UID ' + shortEpc(del.readUid[d.id]) + '，出庫時是 ' + shortEpc(it.epc) + '，不是同一支。'
+                     : 'UID ' + shortEpc(it.epc) + ' 與出庫時相同，是同一支。' });
+      } else if(d.cat === 'cold'){
+        var last = it.all.length ? it.all[it.all.length - 1] : 4.6;
+        var temps = transitTemps(Math.min(last, 7), sim.temp);
+        del.transit[d.id] = temps;
+        var s = tempStats(temps);
+        checks.push({ key:'temp', id:d.id, name:d.name, cat:'cold', ok:s.over === 0, temps:temps,
+          text: s.over === 0 ? '轉運途中 ' + s.n + ' 筆讀數，' + s.min.toFixed(1) + '–' + s.max.toFixed(1) + '°C，全程在 2–8°C。'
+                             : '轉運途中 ' + s.over + ' 筆超出 2–8°C，最高 ' + s.max.toFixed(1) + '°C。' });
+      }
+    });
+    del.checks = checks;
+    var bad = checks.filter(function(c){ return !c.ok; });
+    if(bad.length){ bad.forEach(function(c){ addLog('risk', '病房端核對異常：' + (c.cat ? c.name + ' ' : '') + c.text); }); }
+    else addLog('ok', '病房端核對全部通過：送對病房、封籤完整' + (items.some(function(d){ return d.cat === 'risk'; }) ? '、管制藥 UID 相符' : '') + (items.some(function(d){ return d.cat === 'cold'; }) ? '、冷鏈正常' : '') + '。');
+    upsertRecord(buildSnapshot(state.scan, r, false));
+    announce(bad.length ? '病房端發現 ' + bad.length + ' 項異常，不能簽收' : '病房端核對全部通過，可以簽收');
+    renderStep5(); renderStepper();
+    var g = $('gate5-title'); g.setAttribute('tabindex', '-1'); g.focus({ preventScroll:true });
+  }
+  function receive(){
+    var r = state.res, del = curDel(); if(!del || del.stage !== 'arrived') return;
+    if(del.checks.some(function(c){ return !c.ok; })) return;
+    del.stage = 'received'; del.doneAt = clockNow();
+    addLog('ok', del.ward + ' 病房護理師簽收，批次 ' + r.batch + ' 交接完成。');
+    upsertRecord(buildSnapshot(state.scan, r, false));
+    announce(del.ward + ' 病房已簽收');
+    renderStep5(); renderStepper();
+  }
+  function reject(){
+    var r = state.res, del = curDel(); if(!del || del.stage !== 'arrived') return;
+    del.stage = 'rejected'; del.doneAt = clockNow();
+    var wrongWard = del.checks.some(function(c){ return c.key === 'ward' && !c.ok; });
+    addLog('risk', wrongWard
+      ? del.readWard + ' 病房拒收（非本病房藥籃），已通知傳送人員改送 ' + del.ward + ' 病房，並通知藥局。'
+      : del.readWard + ' 病房拒收，藥籃退回藥局重新核對，已通知值班藥師。');
+    upsertRecord(buildSnapshot(state.scan, r, false));
+    announce('已拒收');
+    renderStep5(); renderStepper();
+  }
+  function toggleSim(key){
+    var del = curDel(); if(!del || del.stage !== 'transit') return;
+    del.sim[key] = !del.sim[key];
+    renderStep5();
+  }
+  function renderRoute(r, del){
+    var fail = del.checks && del.checks.some(function(c){ return !c.ok; });
+    var last;
+    if(del.stage === 'transit') last = { cls:'', t:del.ward + ' 病房', s:'等待送達' };
+    else {
+      var cls = del.stage === 'received' ? 'done' : (fail ? 'bad' : 'cur');
+      var s = del.stage === 'received' ? '簽收 ' + del.doneAt : (del.stage === 'rejected' ? '拒收 ' + del.doneAt : '讀取 ' + del.readAt);
+      last = { cls:cls, t:'送達 ' + del.readWard + ' 病房', s:s };
+    }
+    var steps = [
+      { cls:'done', t:'藥局出庫', s:'封籤出庫 ' + r.released },
+      { cls:'done', t:'傳送人員 A', s:'接手 ' + r.released },
+      { cls:del.stage === 'transit' ? 'cur' : 'done', t:'轉運中', s:del.stage === 'transit' ? '途中（轉運節點監控為中期規劃）' : '已抵達' },
+      last
+    ];
+    $('route').innerHTML = steps.map(function(x){
+      var ic = x.cls === 'done' ? icon('i-check') : (x.cls === 'bad' ? icon('i-alert') : '');
+      return '<li class="' + x.cls + '"><b>' + ic + x.t + '</b><span class="mono">' + x.s + '</span></li>';
+    }).join('');
+  }
+  function renderGate5(r, del){
+    var gate = $('gate5'), bad = del.checks ? del.checks.filter(function(c){ return !c.ok; }) : [];
+    var st, title, note, action;
+    $('gate5-meta').textContent = r.batch + ' · ' + r.bsk + ' · 目的地 ' + del.ward + ' 病房 · 出庫 ' + r.released;
+    if(del.stage === 'transit'){
+      st = 'transit'; title = '轉運中：' + r.bsk + ' → ' + del.ward + ' 病房';
+      note = '送達時病房端會再讀一次，比對出庫時記錄的封籤、管制藥 UID 與溫度。可以先在下方選擇要模擬的異常。';
+      action = '<button type="button" class="btn btn-primary" id="arrive-go" data-k="arrive">' + icon('i-wave') + '送達病房，感應讀取</button>';
+    } else if(del.stage === 'arrived'){
+      if(bad.length){
+        st = 'alert'; title = '病房端發現 ' + bad.length + ' 項異常，不能簽收';
+        note = '系統已亮紅燈、發出提示音並通知藥局。這一籃必須拒收。';
+        action = '<button type="button" class="btn btn-alarm" id="reject-go" data-k="reject">' + icon('i-x') + '拒收並通知藥局</button>';
+      } else {
+        st = 'ready'; title = '病房端核對全部通過，可以簽收';
+        note = '送對病房、封籤完整' + (del.checks.some(function(c){ return c.key === 'uid'; }) ? '、管制藥是同一支' : '') + (del.checks.some(function(c){ return c.key === 'temp'; }) ? '、冷鏈全程正常' : '') + '。';
+        action = '<button type="button" class="btn btn-primary" id="receive-go" data-k="receive">' + icon('i-check') + '護理師簽收</button>';
+      }
+    } else if(del.stage === 'received'){
+      st = 'released'; title = del.ward + ' 病房已簽收，交接完成';
+      note = '從藥局出庫到病房簽收的每一步都已寫入稽核軌跡。';
+      action = '<span class="released-at">' + icon('i-check') + '簽收 <span class="mono">' + del.doneAt + '</span> · 已同步 HIS</span>';
+    } else {
+      st = 'alert'; title = '已拒收';
+      note = bad.some(function(c){ return c.key === 'ward'; }) ? '非本病房藥籃，已通知傳送人員改送 ' + del.ward + ' 病房。' : '藥籃退回藥局重新核對，異常已寫入稽核軌跡。';
+      action = '<span class="rejected-at">' + icon('i-x') + '拒收 <span class="mono">' + del.doneAt + '</span> · 已通知藥局</span>';
+    }
+    gate.setAttribute('data-state', st);
+    $('gate5-title').textContent = title;
+    $('gate5-note').textContent = note;
+    $('gate5-action').innerHTML = action;
+  }
+  function renderS5Main(r, del){
+    var items = r.order.map(function(id){ return BY_ID[id]; });
+    var has = { risk:items.some(function(d){ return d.cat === 'risk'; }), cold:items.some(function(d){ return d.cat === 'cold'; }) };
+    var html;
+    if(del.stage === 'transit'){
+      var normals = countCat(items, 'normal');
+      var tags = '<li><span class="epc">' + shortEpc(r.seal.epc) + '</span><span class="what">防拆封籤 · ' + r.bsk + '</span></li>';
+      if(normals){ var bt = r.items[items.filter(function(d){ return d.cat === 'normal'; })[0].id]; tags += '<li><span class="epc">' + shortEpc(bt.epc) + '</span><span class="what">藥籃標籤 · 依醫囑 ' + normals + ' 項一般藥品</span></li>'; }
+      items.forEach(function(d){ if(d.cat !== 'normal') tags += '<li><span class="epc">' + shortEpc(r.items[d.id].epc) + '</span><span class="what">' + d.name + (d.cat === 'cold' ? ' · 溫度記錄中' : '') + '</span></li>'; });
+      html = '<h3 class="col-title">出庫時記錄的標籤</h3>' +
+        '<div class="readout"><p class="note" style="margin:0">病房端讀取時，會逐一比對這些標籤。</p><ul class="tag-list">' + tags + '</ul></div>' +
+        '<div class="sim"><h4>情境模擬（選用）</h4><p>選擇要模擬的異常，再按「送達病房，感應讀取」，看病房端會不會發現。不選就是正常送達。</p><div class="row">' +
+        SIMS.filter(function(s){ return !s.need || has[s.need]; }).map(function(s){
+          return '<button type="button" class="chip-btn warn" data-sim="' + s.key + '" data-k="sim-' + s.key + '" aria-pressed="' + (del.sim[s.key] ? 'true' : 'false') + '">' + (del.sim[s.key] ? icon('i-alert') : '') + s.label + '</button>';
+        }).join('') + '</div></div>';
+    } else {
+      var rows = del.checks.map(function(c){
+        return '<tr><td class="c-name"><span class="nm">' + c.name + '</span>' + (c.cat ? catChip(c.cat) : '') + '</td>' +
+          '<td class="c-status">' + (c.ok ? pill('ok', c.key === 'uid' ? '相符' : '通過') : pill('alert', c.key === 'uid' ? '不符' : '異常')) + '</td>' +
+          '<td class="c-note">' + esc(c.text) + (c.temps ? miniSpark(c.temps) : '') + '</td></tr>';
+      }).join('');
+      var nBad = del.checks.filter(function(c){ return !c.ok; }).length;
+      html = '<h3 class="col-title">病房端核對 <span class="count">' + del.checks.length + ' 項' + (nBad ? '・' + nBad + ' 項異常' : '') + '</span></h3>' +
+        '<div class="table-wrap"><table class="chk"><thead><tr><th scope="col">檢查項目</th><th scope="col">結果</th><th scope="col">說明</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+        '<p class="note">一般藥品不逐支貼標，病房端靠封籤確認出庫後沒被動過；品項與數量的正確性在調劑端由條碼核對與醫囑負責。</p>';
+    }
+    $('s5-main').innerHTML = html;
+  }
+  function renderStep5(){
+    var r = state.res, del = curDel();
+    var ok = !!(r && r.released && del);
+    $('s5-empty').hidden = ok;
+    $('s5-body').hidden = !ok;
+    if(!ok) return;
+    keepFocus(function(){ renderRoute(r, del); renderGate5(r, del); renderS5Main(r, del); renderLogTo('log5'); });
+  }
+
+  /* ================= step 5: back-office records ================= */
+  /* A record is a snapshot of one batch: rows (one per drug) + audit trail.
+     The batch in progress is rebuilt live on every render; a batch is frozen into
+     state.records when it is released (closed) or voided. */
+  function isArchived(){ return !!(state.res && state.res.archived); }
+  function tagOf(sc, id){ return sc.tags.filter(function(t){ return t.ids.indexOf(id) >= 0; })[0]; }
+  function tempStats(temps){
+    var mn = Infinity, mx = -Infinity, over = 0;
+    temps.forEach(function(t){ mn = Math.min(mn, t); mx = Math.max(mx, t); if(t > SAFE_MAX || t < SAFE_MIN) over++; });
+    return { min:mn, max:mx, over:over, n:temps.length };
+  }
+  function tempNote(temps, extra){
+    if(!temps || !temps.length) return '<span class="dim">尚未開始冷鏈監控</span>';
+    var s = tempStats(temps);
+    return '溫度 <span class="mono">' + s.min.toFixed(1) + '–' + s.max.toFixed(1) + '°C</span> · ' + s.n + ' 筆讀數 · ' +
+      (s.over ? '<b class="c-risk">' + s.over + ' 筆超標</b>' : '全程在安全範圍') + (extra ? ' · ' + extra : '');
+  }
+  function miniSpark(temps){
+    if(!temps || temps.length < 2) return '';
+    var W = 240, H = 48, y = function(t){ return H - 4 - t / T_MAX * (H - 8); };
+    var n = temps.length, dx = (W - 8) / (n - 1), x = function(i){ return 4 + i * dx; };
+    var s = '<svg class="spark mini-spark" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + n + ' 筆溫度讀數，綠色帶為 2 到 8°C 安全範圍">' +
+      '<rect class="band" x="0" y="' + y(SAFE_MAX).toFixed(1) + '" width="' + W + '" height="' + (y(SAFE_MIN) - y(SAFE_MAX)).toFixed(1) + '"/>' +
+      '<polyline class="line" points="' + temps.map(function(t, i){ return x(i).toFixed(1) + ',' + y(t).toFixed(1); }).join(' ') + '"/>';
+    temps.forEach(function(t, i){ if(t > SAFE_MAX || t < SAFE_MIN) s += '<circle class="hot" cx="' + x(i).toFixed(1) + '" cy="' + y(t).toFixed(1) + '" r="2.2"/>'; });
+    s += '<text x="2" y="' + (y(SAFE_MAX) - 2).toFixed(1) + '">8°</text><text x="2" y="' + (y(SAFE_MIN) + 9).toFixed(1) + '">2°</text>';
+    return s + '</svg>';
+  }
+  function signNote(a, b){
+    function one(who, at){ return '藥師 ' + who + '：' + (at ? '<span class="mono">' + at + '</span>' : '<span class="dim">未簽核</span>'); }
+    return one('A', a) + '<br>' + one('B', b);
+  }
+  function buildSnapshot(sc, r, voided){
+    var released = !!(r && r.released);
+    var del = (state.del && state.del.batch === sc.batch) ? state.del : null;
+    var checked = !!(del && del.checks);
+    var chk = function(key, id){ return checked ? del.checks.filter(function(c){ return c.key === key && (!id || c.id === id); })[0] : null; };
+    var sealC = chk('seal');
+    var rows = sc.order.map(function(id){
+      var d = BY_ID[id], tag = tagOf(sc, id), it = r ? r.items[id] : null;
+      var row = { name:d.name, spec:d.spec, qty:d.qty, cat:d.cat, epc:tag.epc, tagKind:tag.kind, temps:null, anomaly:false };
+      if(d.cat === 'normal'){
+        if(del && del.stage === 'received') row.st = { k:'ok', text:'已送達・封籤完整' };
+        else if(sealC && !sealC.ok) row.st = { k:'alert', text:'封籤破損・內容無法保證' };
+        else if(del && del.stage === 'rejected') row.st = { k:'wait', text:'隨籃退回藥局' };
+        else if(del && del.stage === 'arrived') row.st = { k:'wait', text:'已送達・待簽收' };
+        else if(del) row.st = { k:'live', text:'轉運中' };
+        else row.st = { k:'ok', text:'藥籃已讀取' };
+        row.note = '依醫囑清單・免貼標' +
+          (r && r.seal ? '<br>封籤 <span class="mono">' + shortEpc(r.seal.epc) + '</span>' + (sealC ? (sealC.ok ? ' · 病房端：完整' : ' · <b class="c-risk">病房端：已破損</b>') : '') : '');
+      } else if(d.cat === 'risk'){
+        var n = it ? (it.signA ? 1 : 0) + (it.signB ? 1 : 0) : 0;
+        row.st = n === 2 ? { k:'ok', text:'雙人核對完成' } : { k:'wait', text:'待雙人核對 ' + n + '/2' };
+        row.note = signNote(it && it.signA, it && it.signB);
+        var uc = chk('uid', id);
+        if(uc){
+          row.note += '<br>病房端：' + (uc.ok ? 'UID 相符' : '<b class="c-risk">UID 不符（' + shortEpc(del.readUid[id]) + '）</b>');
+          if(!uc.ok){ row.st = { k:'alert', text:'病房端 UID 不符' }; row.anomaly = true; }
+          else if(del.stage === 'received') row.st = { k:'ok', text:'已送達・UID 相符' };
+        }
+      } else if(!it){
+        row.st = { k:'wait', text:'未開始監控' }; row.note = tempNote(null);
+      } else {
+        var tr = del && del.transit[id] ? del.transit[id] : [];
+        row.temps = it.all.concat(tr);
+        row.anomaly = !!(it.faultOccurred || it.excursion || it.status === 'overdue' || it.status === 'reviewed');
+        if(it.status === 'stored') row.st = { k:'ok', text:it.faultOccurred ? '已放入保冷（曾異常）' : '已放入保冷隔層' };
+        else if(it.status === 'reviewed') row.st = { k:'ok', text:'主管已複核' };
+        else if(it.status === 'overdue') row.st = { k:'alert', text:'逾時未放入保冷' };
+        else if(it.excursion) row.st = { k:'alert', text:'溫度異常' };
+        else row.st = { k:'live', text:'監控中 ' + mmss(it.left) };
+        var tc = chk('temp', id);
+        if(tc && !tc.ok){ row.anomaly = true; row.st = { k:'alert', text:'轉運途中超溫' }; }
+        else if(tc && del.stage === 'received') row.st = { k:'ok', text:it.faultOccurred ? '已送達（藥局端曾異常）' : '已送達・冷鏈正常' };
+        var extra = it.status === 'stored' ? '離開冰箱 <span class="mono">' + it.stored + '</span>'
+          : ((it.status === 'overdue' || it.status === 'reviewed') ? '<b class="c-risk">冷鏈逾時</b>' : '');
+        if(tr.length) extra += (extra ? ' · ' : '') + '含轉運 ' + tr.length + ' 筆';
+        row.note = tempNote(row.temps, extra);
+      }
+      if(voided) row.st = { k:'void', text:'已作廢' };
+      return row;
+    });
+    var pending = r ? (released ? 0 : gateInfo(r).pending) : rows.filter(function(x){ return x.cat !== 'normal'; }).length;
+    var anomaly = rows.some(function(x){ return x.anomaly; }) || !!(checked && del.checks.some(function(c){ return !c.ok; }));
+    var status;
+    if(voided) status = 'void';
+    else if(del) status = del.stage === 'transit' ? 'transit' : (del.stage === 'arrived' ? 'arrived' : (del.stage === 'rejected' ? 'rejected' : (anomaly ? 'closed-flag' : 'closed')));
+    else status = released ? (anomaly ? 'closed-flag' : 'closed') : 'progress';
+    var route = [];
+    if(r && r.seal) route.push('封籤 ' + r.seal.at);
+    if(released) route.push('出庫 ' + r.released);
+    if(del && del.readAt) route.push(del.readWard + ' 病房讀取 ' + del.readAt);
+    if(del && del.stage === 'received') route.push('簽收 ' + del.doneAt);
+    if(del && del.stage === 'rejected') route.push('拒收 ' + del.doneAt);
+    return {
+      batch:sc.batch, demo:false, live:false, at:sc.at, sec:sc.sec, ward:sc.ward, bsk:sc.bsk,
+      status:status, anomaly:anomaly && !voided, route:route.join(' → '),
+      pending:voided ? 0 : pending,
+      alarm:rows.some(function(x){ return x.st.k === 'alert'; }),
+      rows:rows,
+      audit:state.log.filter(function(e){ return e.b === sc.batch; }).map(function(e){ return { t:e.t, kind:e.kind, text:e.text }; })
+    };
+  }
+  function voidLive(reason){
+    var sc = state.scan;
+    addLog('warn', reason, sc.batch);
+    state.records.unshift(buildSnapshot(sc, state.res, true));
+    if(state.res) state.res.archived = true;
+  }
+  function liveRecord(){
+    var sc = state.scan;
+    if(!sc || !sc.done || sc.sig !== sig() || isArchived()) return null;
+    var rec = buildSnapshot(sc, state.res, false); rec.live = true;
+    return rec;
+  }
+  function allRecords(){ var live = liveRecord(); return (live ? [live] : []).concat(state.records); }
+  function recPill(rec){
+    if(rec.status === 'void') return pill('void', '已作廢');
+    if(rec.status === 'closed') return pill('ok', '已簽收結案');
+    if(rec.status === 'closed-flag') return pill('flag', '已簽收・有異常紀錄');
+    if(rec.status === 'transit') return pill('live', '已出庫・轉運中');
+    if(rec.status === 'arrived') return rec.anomaly ? pill('alert', '病房端異常・待處理') : pill('wait', '已送達・待簽收');
+    if(rec.status === 'rejected') return pill('alert', '病房拒收・退回藥局');
+    if(rec.alarm) return pill('alert', '異常處理中');
+    return pill('wait', rec.pending ? '藥局處理中・待處理 ' + rec.pending : '待出庫');
+  }
+  var FILTERS = [ { key:'all', label:'全部' }, { key:'open', label:'進行中／異常' }, { key:'closed', label:'已簽收結案' } ];
+  function inFilter(rec, f){
+    if(f === 'open') return ['progress', 'transit', 'arrived', 'rejected', 'closed-flag'].indexOf(rec.status) >= 0;
+    if(f === 'closed') return rec.status === 'closed' || rec.status === 'closed-flag';
+    return true;
+  }
+
+  /* three example batches so the back office is not empty on first open; clearly labelled 示範 */
+  function seedRecords(){
+    var seed = 20261003;
+    function rnd(){ seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+    function epc(){ var s = 'E280'; for(var i = 0; i < 20; i++){ s += '0123456789ABCDEF'.charAt(Math.floor(rnd() * 16)); } return s; }
+    function at(ms){ var d = new Date(ms); return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); }
+    function row(id, tag, st, note){ var d = BY_ID[id]; return { name:d.name, spec:d.spec, qty:d.qty, cat:d.cat, epc:tag, tagKind:d.cat === 'normal' ? 'basket' : 'item', st:st, note:note, temps:null, anomaly:false }; }
+    function sealNote(sealEpc, ok){ return '依醫囑清單・免貼標<br>封籤 <span class="mono">' + shortEpc(sealEpc) + '</span> · ' + (ok ? '病房端：完整' : '<b class="c-risk">病房端：已破損</b>'); }
+    var now = Date.now(), arrived = { k:'ok', text:'已送達・封籤完整' };
+
+    /* A: routine basket to 8B, signed for cleanly */
+    var tA = now - (1 * 3600 + 47 * 60 + 12) * 1000, bA = 'BATCH-2F08', tagA = epc(), sealA = epc();
+    var A = {
+      batch:bA, demo:true, live:false, at:at(tA), sec:0.62, ward:'8B', bsk:'BSK-318', status:'closed', anomaly:false, pending:0, alarm:false,
+      route:'封籤 ' + at(tA + 30000) + ' → 出庫 ' + at(tA + 41000) + ' → 8B 病房讀取 ' + at(tA + 9 * 60000) + ' → 簽收 ' + at(tA + 9 * 60000 + 25000),
+      rows:['apap', 'amox', 'ibu', 'cefa', 'ns'].map(function(id){ return row(id, tagA, arrived, sealNote(sealA, true)); }),
+      audit:[
+        { t:at(tA), kind:'info', text:'批次 ' + bA + '（8B 病房醫囑，BSK-318）感應完成：解析 1 枚標籤、5 品項（模擬 0.62 秒），已同步 HIS。' },
+        { t:at(tA + 30000), kind:'ok', text:'藥籃 BSK-318 已貼上防拆封籤（' + shortEpc(sealA) + '），封籤後內容不得再變動。' },
+        { t:at(tA + 41000), kind:'ok', text:'批次 ' + bA + ' 出庫，5 品項的核對紀錄已同步 HIS。' },
+        { t:at(tA + 41000), kind:'info', text:'藥籃 BSK-318 交給傳送人員 A，目的地 8B 病房。' },
+        { t:at(tA + 9 * 60000), kind:'info', text:'藥籃 BSK-318 送達 8B 病房，完成感應讀取。' },
+        { t:at(tA + 9 * 60000), kind:'ok', text:'病房端核對全部通過：送對病房、封籤完整。' },
+        { t:at(tA + 9 * 60000 + 25000), kind:'ok', text:'8B 病房護理師簽收，批次 ' + bA + ' 交接完成。' }
+      ].reverse()
+    };
+
+    /* B: mixed basket to 7A with a resolved cold-chain excursion at the pharmacy */
+    var tB = now - 43 * 60 * 1000 - 18000, bB = 'BATCH-5A1C', sealB = epc(), morEpc = epc();
+    var temps = [], i;
+    for(i = 0; i < 94; i++){
+      var p = (i - 34) / 24, t = 4.6 + (rnd() - 0.5) * 0.8;
+      if(p >= 0 && p <= 1) t = 4.8 + 4.6 * Math.pow(Math.sin(Math.PI * p), 1.5) + (rnd() - 0.5) * 0.3;
+      temps.push(Math.round(t * 10) / 10);
+    }
+    var sec = function(idx){ return tB + (2 + (idx - 16)) * 1000; };   /* 16 readings on entry, then one per second */
+    var up = 0; while(temps[up] <= SAFE_MAX) up++;
+    var pk = up; for(i = up; i < temps.length && temps[i] > SAFE_MAX - 0.6; i++){ if(temps[i] > temps[pk]) pk = i; }
+    var back = pk; while(temps[back] > SAFE_MAX - 0.6) back++;
+    var peak = temps[pk];
+    for(i = 0; i < 36; i++){ temps.push(Math.round((4.4 + (rnd() - 0.5) * 0.9) * 10) / 10); }   /* transit readings, all in range */
+    var rowC = row('vac', epc(), { k:'ok', text:'已送達（藥局端曾異常）' }, tempNote(temps, '離開冰箱 <span class="mono">13:00</span> · 含轉運 36 筆'));
+    rowC.temps = temps; rowC.anomaly = true;
+    var tOut = tB + 95000, tRead = tB + 95000 + 11 * 60000;
+    var B = {
+      batch:bB, demo:true, live:false, at:at(tB), sec:0.76, ward:'7A', bsk:'BSK-207', status:'closed-flag', anomaly:true, pending:0, alarm:false,
+      route:'封籤 ' + at(tB + 88000) + ' → 出庫 ' + at(tOut) + ' → 7A 病房讀取 ' + at(tRead) + ' → 簽收 ' + at(tRead + 31000),
+      rows:[
+        row('amox', epc(), arrived, sealNote(sealB, true)),
+        row('morph', morEpc, { k:'ok', text:'已送達・UID 相符' }, signNote(at(tB + 52000), at(tB + 71000)) + '<br>病房端：UID 相符'),
+        rowC
+      ],
+      audit:[
+        { t:at(tB), kind:'info', text:'批次 ' + bB + '（7A 病房醫囑，BSK-207）感應完成：解析 3 枚標籤、3 品項（模擬 0.76 秒），已同步 HIS。' },
+        { t:at(tB + 2000), kind:'risk', text:'Morphine 為高風險管制藥，放行前需兩位藥師簽核。' },
+        { t:at(tB + 2000), kind:'info', text:'Vaccine 離開冰箱，需在 15 分鐘內放入藥籃保冷隔層，隔層記錄器開始全程記錄溫度。' },
+        { t:at(sec(34)), kind:'warn', text:'Vaccine 暫放在工作台上，沒有放回保冷區，溫度開始上升。' },
+        { t:at(sec(up)), kind:'risk', text:'Vaccine 溫度 ' + temps[up].toFixed(1) + '°C 超出 2–8°C，已亮紅燈、發出提示音並通知值班藥師。' },
+        { t:at(sec(pk)), kind:'info', text:'Vaccine 異常已處理（移回保冷區），等待溫度回到安全範圍。' },
+        { t:at(sec(back)), kind:'ok', text:'Vaccine 溫度回到安全範圍（' + temps[back].toFixed(1) + '°C，最高曾達 ' + peak.toFixed(1) + '°C），紀錄需加註複核。' },
+        { t:at(tB + 52000), kind:'info', text:'Morphine 第一核對人藥師 A 已簽核。' },
+        { t:at(tB + 71000), kind:'ok', text:'Morphine 完成雙人核對（藥師 A、藥師 B）。' },
+        { t:at(tB + 80000), kind:'ok', text:'Vaccine 已放入藥籃保冷隔層（離開冰箱 13:00），紀錄加註：曾發生溫度異常。' },
+        { t:at(tB + 88000), kind:'ok', text:'藥籃 BSK-207 已貼上防拆封籤（' + shortEpc(sealB) + '），封籤後內容不得再變動。' },
+        { t:at(tOut), kind:'ok', text:'批次 ' + bB + ' 出庫，3 品項的核對紀錄已同步 HIS。' },
+        { t:at(tOut), kind:'info', text:'藥籃 BSK-207 交給傳送人員 A，目的地 7A 病房。' },
+        { t:at(tRead), kind:'info', text:'藥籃 BSK-207 送達 7A 病房，完成感應讀取。' },
+        { t:at(tRead), kind:'ok', text:'病房端核對全部通過：送對病房、封籤完整、管制藥 UID 相符、冷鏈正常。' },
+        { t:at(tRead + 31000), kind:'ok', text:'7A 病房護理師簽收，批次 ' + bB + ' 交接完成。' }
+      ].reverse()
+    };
+
+    /* C: routine basket to 6A, seal found broken at the ward and rejected */
+    var tC = now - 19 * 60 * 1000 - 40000, bC = 'BATCH-91E7', tagC = epc(), sealC = epc();
+    var tCR = tC + 8 * 60000;
+    var broken = { k:'alert', text:'封籤破損・內容無法保證' };
+    var C = {
+      batch:bC, demo:true, live:false, at:at(tC), sec:0.62, ward:'6A', bsk:'BSK-455', status:'rejected', anomaly:true, pending:0, alarm:true,
+      route:'封籤 ' + at(tC + 26000) + ' → 出庫 ' + at(tC + 33000) + ' → 6A 病房讀取 ' + at(tCR) + ' → 拒收 ' + at(tCR + 40000),
+      rows:['apap', 'cefa'].map(function(id){ return row(id, tagC, broken, sealNote(sealC, false)); }),
+      audit:[
+        { t:at(tC), kind:'info', text:'批次 ' + bC + '（6A 病房醫囑，BSK-455）感應完成：解析 1 枚標籤、2 品項（模擬 0.62 秒），已同步 HIS。' },
+        { t:at(tC + 26000), kind:'ok', text:'藥籃 BSK-455 已貼上防拆封籤（' + shortEpc(sealC) + '），封籤後內容不得再變動。' },
+        { t:at(tC + 33000), kind:'ok', text:'批次 ' + bC + ' 出庫，2 品項的核對紀錄已同步 HIS。' },
+        { t:at(tC + 33000), kind:'info', text:'藥籃 BSK-455 交給傳送人員 A，目的地 6A 病房。' },
+        { t:at(tCR), kind:'info', text:'藥籃 BSK-455 送達 6A 病房，完成感應讀取。' },
+        { t:at(tCR), kind:'risk', text:'病房端核對異常：讀不到封籤，藥籃曾被開啟：2 項一般藥品的內容無法保證，需退回藥局重新核對。' },
+        { t:at(tCR + 40000), kind:'risk', text:'6A 病房拒收，藥籃退回藥局重新核對，已通知值班藥師。' }
+      ].reverse()
+    };
+    return [C, B, A];
+  }
+
+  function renderKpis(list){
+    var real = list.filter(function(x){ return x.status !== 'void'; });
+    var items = real.reduce(function(s, x){ return s + x.rows.length; }, 0);
+    var open = real.filter(function(x){ return ['progress', 'transit', 'arrived'].indexOf(x.status) >= 0; }).length;
+    var flagged = real.filter(function(x){ return x.anomaly; }).length;
+    var rejected = real.filter(function(x){ return x.status === 'rejected'; }).length;
+    var demo = list.filter(function(x){ return x.demo; }).length, voids = list.length - real.length;
+    var tiles = [
+      { l:'本班批次', v:list.length, s:[demo ? '含示範 ' + demo + ' 筆' : '', voids ? '作廢 ' + voids + ' 筆' : ''].filter(Boolean).join('・') },
+      { l:'點交品項', v:items, s:'不含作廢批次' },
+      { l:'進行中批次', v:open, cls:open ? 'v-warn' : '', s:'藥局處理中、轉運中、待簽收' },
+      { l:'有異常的批次', v:flagged, cls:flagged ? 'v-risk' : '', s:'冷鏈、封籤、UID、送錯病房' + (rejected ? '・拒收 ' + rejected + ' 筆' : '') }
+    ];
+    $('kpis').innerHTML = tiles.map(function(k){
+      return '<div class="kpi"><span class="kl">' + k.l + '</span><span class="kv' + (k.cls ? ' ' + k.cls : '') + '">' + k.v + '</span>' +
+        (k.s ? '<span class="ks">' + k.s + '</span>' : '') + '</div>';
+    }).join('');
+  }
+  function renderRecList(list, selId){
+    $('rec-filter').innerHTML = FILTERS.map(function(f){
+      return '<button type="button" class="chip-btn" data-filter="' + f.key + '" data-k="filter-' + f.key + '" aria-pressed="' + (state.recFilter === f.key ? 'true' : 'false') + '">' + f.label + '</button>';
+    }).join('');
+    var shown = list.filter(function(x){ return inFilter(x, state.recFilter); });
+    if(!shown.length){ $('rec-body').innerHTML = '<tr class="empty-row"><td class="empty-cell" colspan="5">沒有符合條件的批次。</td></tr>'; return; }
+    $('rec-body').innerHTML = shown.map(function(x){
+      var sel = x.batch === selId;
+      var cc = ['normal', 'risk', 'cold'].map(function(c){
+        return '<span class="cc">' + icon(CAT[c].icon, 'c-' + c) + '<span class="sr-only">' + CAT[c].label + '</span>' + x.rows.filter(function(w){ return w.cat === c; }).length + '</span>';
+      }).join('');
+      return '<tr data-rec="' + x.batch + '"' + (sel ? ' class="is-sel"' : '') + '>' +
+        '<td class="b-id"><button type="button" class="b-pick" data-rec="' + x.batch + '" data-k="rec-' + x.batch + '" aria-pressed="' + (sel ? 'true' : 'false') + '">' + x.batch + '</button>' +
+          (x.live ? ' <span class="xtag live">進行中</span>' : (x.demo ? ' <span class="xtag">示範</span>' : '')) +
+          (x.ward ? '<span class="sp" style="display:block;font-family:var(--font-body)">→ ' + x.ward + ' 病房</span>' : '') + '</td>' +
+        '<td class="b-time">' + x.at + '</td>' +
+        '<td class="b-items"><span class="cc">' + x.rows.length + ' 項</span>' + cc + '</td>' +
+        '<td class="b-sec">' + x.sec.toFixed(2) + ' 秒</td>' +
+        '<td class="b-st">' + recPill(x) + '</td></tr>';
+    }).join('');
+  }
+  function renderRecDetail(rec){
+    var el = $('rec-detail');
+    if(!rec){ el.innerHTML = '<p class="dim" style="margin:0" id="rec-d-title">還沒有批次紀錄。完成一次感應後會出現在這裡。</p>'; return; }
+    var rows = rec.rows.map(function(w, i){
+      return '<tr><td class="i-no">' + (i + 1) + '</td>' +
+        '<td class="i-nm"><span class="nm">' + w.name + '</span><span class="sp">' + (w.tagKind === 'basket' ? '藥籃標籤 ' : '單品標籤 ') + '<span title="' + w.epc + '">' + shortEpc(w.epc) + '</span></span></td>' +
+        '<td class="i-ct">' + catChip(w.cat) + '</td>' +
+        '<td class="i-st">' + pill(w.st.k, w.st.text) + '</td>' +
+        '<td class="i-nt">' + w.note + (w.temps ? miniSpark(w.temps) : '') + '</td></tr>';
+    }).join('');
+    var trail = rec.audit.length ? rec.audit.map(function(e){
+      return '<li><span class="k k-' + e.kind + '" aria-hidden="true"></span><time>' + e.t + '</time><span>' + esc(e.text) + '</span></li>';
+    }).join('') : '<li><span></span><span></span><span class="dim">沒有稽核事件。</span></li>';
+    el.innerHTML =
+      '<div class="rec-head"><div>' +
+        '<h3 id="rec-d-title"><span class="mono">' + rec.batch + '</span>' +
+          (rec.live ? '<span class="xtag live">進行中・即時更新</span>' : (rec.demo ? '<span class="xtag">示範資料</span>' : '')) + '</h3>' +
+        '<p class="rec-meta"><span>感應時間 <b class="mono">' + rec.at + '</b></span><span>品項 <b>' + rec.rows.length + '</b></span>' +
+          '<span>感應耗時 <b class="mono">' + rec.sec.toFixed(2) + ' 秒</b>（模擬）</span><span>稽核事件 <b>' + rec.audit.length + '</b></span>' +
+          (rec.ward ? '<span>目的地 <b>' + rec.ward + ' 病房</b>' + (rec.bsk ? '（' + rec.bsk + '）' : '') + '</span>' : '') + '</p>' +
+          (rec.route ? '<p class="rec-meta"><span>交接 <b class="mono">' + rec.route + '</b></span></p>' : '') +
+      '</div>' + recPill(rec) + '</div>' +
+      '<h4 class="sub-t">品項明細</h4>' +
+      '<div class="table-wrap bk"><table class="bk-items"><thead><tr><th scope="col">#</th><th scope="col">藥品／標籤</th><th scope="col">類別</th><th scope="col">狀態</th><th scope="col">處理紀錄</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<h4 class="sub-t">稽核軌跡 <span class="count">新 → 舊</span></h4>' +
+      '<ol class="trail" aria-label="稽核軌跡，最新在上">' + trail + '</ol>';
+  }
+  function renderRecords(){
+    var sc = state.scan;
+    /* a finished scan is already in the system, even if step 4 was never opened */
+    if(sc && sc.done && sc.sig === sig() && !isArchived()) ensureRes();
+    var list = allRecords(), selId = state.recSel;
+    if(!selId || !list.some(function(x){ return x.batch === selId; })) selId = list.length ? list[0].batch : null;
+    var rec = list.filter(function(x){ return x.batch === selId; })[0] || null;
+    $('rec-updated').textContent = clockNow();
+    keepFocus(function(){ renderKpis(list); renderRecList(list, selId); renderRecDetail(rec); });
+    var n = practiceCount(), total = n + demoCount();
+    $('clear-open').disabled = total === 0;
+    $('clear-open-lbl').textContent = total ? '清除紀錄' : '沒有紀錄';
+    if(!total) closeClear(false);
+    else if(!$('clear-confirm').hidden) fillClear();
+  }
+  /* practice = every batch the team created in this session; demo = the 示範 seed batches */
+  function practiceCount(){
+    var live = liveRecord() ? 1 : 0;
+    return live + state.records.filter(function(x){ return !x.demo; }).length;
+  }
+  function demoCount(){ return state.records.filter(function(x){ return x.demo; }).length; }
+  function fillClear(){
+    var n = practiceCount(), d = demoCount();
+    var inFlight = !!(state.scan || state.res || state.del);
+    $('clear-detail').textContent =
+      '「只清除練習紀錄」刪除你們操作產生的 ' + n + ' 筆批次和系統紀錄' + (inFlight ? '（含目前進行中的批次）' : '') + '，保留 ' + d + ' 筆示範資料。' +
+      '「全部清空」連示範資料一起刪除，後台會變成空白。藥籃選擇都不會改變；重新整理頁面後示範資料會回來。';
+    $('clear-go').disabled = n === 0;
+    $('clear-go-lbl').textContent = n ? '只清除練習紀錄（' + n + ' 筆）' : '沒有練習紀錄';
+    $('clear-all').disabled = n + d === 0;
+    $('clear-all-lbl').textContent = '全部清空（' + (n + d) + ' 筆，含示範）';
+  }
+  function openClear(){
+    if(practiceCount() + demoCount() === 0) return;
+    fillClear();
+    $('clear-confirm').hidden = false;
+    $('clear-open').setAttribute('aria-expanded', 'true');
+    $('clear-cancel').focus({ preventScroll:true });
+  }
+  function closeClear(refocus){
+    $('clear-confirm').hidden = true;
+    $('clear-open').setAttribute('aria-expanded', 'false');
+    if(refocus && !$('clear-open').disabled) $('clear-open').focus({ preventScroll:true });
+  }
+  function clearPractice(all){
+    var n = practiceCount() + (all ? demoCount() : 0);
+    stopAuto(); stopTicker(); clearTimeout(state.resolveTimer); clearTimeout(state.rfTimer);
+    state.records = all ? [] : state.records.filter(function(x){ return x.demo; });
+    state.log = [];
+    state.cmp = null; state.scan = null; state.res = null; state.del = null;
+    state.recSel = null; state.recFilter = 'all';
+    closeClear(false);
+    renderRecords(); renderStepper();
+    var msg = all ? '已清空全部 ' + n + ' 筆紀錄，後台目前是空白的。' : '已清除 ' + n + ' 筆練習紀錄，保留示範資料。';
+    var done = document.createElement('p'); done.className = 'clear-done'; done.setAttribute('role', 'status'); done.textContent = msg;
+    var old = document.querySelector('.clear-done'); if(old) old.remove();
+    $('clear-confirm').parentNode.insertBefore(done, $('clear-confirm'));
+    setTimeout(function(){ if(done.parentNode) done.remove(); }, 4000);
+    $('h-step-6').focus({ preventScroll:true });
+    announce(msg);
+  }
+  function selectRec(id){
+    state.recSel = id;
+    renderRecords();
+    var d = $('rec-detail');
+    if(d.getBoundingClientRect().top > window.innerHeight * 0.55) d.scrollIntoView({ behavior:reduceMotion ? 'auto' : 'smooth', block:'start' });
+    announce('已開啟批次 ' + id + ' 的明細');
+  }
+  function setFilter(f){ state.recFilter = f; renderRecords(); }
+  function newBatchFlow(){
+    var sc = state.scan;
+    if(sc && sc.done && !isArchived()) voidLive('批次 ' + sc.batch + ' 未出庫即中止，已作廢。');
+    stopAuto(); stopTicker(); clearTimeout(state.resolveTimer); clearTimeout(state.rfTimer);
+    state.sel = {}; PRESETS[0].ids.forEach(function(id){ state.sel[id] = true; }); state.ward = PRESETS[0].ward;
+    state.cmp = null; state.scan = null; state.res = null; state.del = null; state.recSel = null;
+    goStep(1, { focus:true });
+    announce('已建立新批次，先選擇這一批的藥品');
+  }
+
+  /* ================= tools ================= */
+  function setPresenter(on){
+    document.documentElement.classList.toggle('presenter', on);
+    $('t-presenter').setAttribute('aria-pressed', on ? 'true' : 'false');
+    try{ localStorage.setItem('rfidbox-presenter', on ? '1' : '0'); }catch(e){}
+  }
+  function togglePresenter(){ setPresenter(!document.documentElement.classList.contains('presenter')); }
+  function toggleFull(){
+    var el = document.documentElement;
+    try{
+      if(document.fullscreenElement){ document.exitFullscreen(); }
+      else if(el.requestFullscreen){ var p = el.requestFullscreen(); if(p && p.catch) p.catch(function(){ announce('這個畫面不支援全螢幕，請改用瀏覽器的全螢幕功能。'); }); }
+    }catch(e){}
+  }
+  function syncFull(){
+    var on = !!document.fullscreenElement;
+    $('t-full').setAttribute('aria-pressed', on ? 'true' : 'false');
+    $('t-full-lbl').textContent = on ? '結束全螢幕' : '全螢幕';
+  }
+  function openConfirm(){ $('reset-confirm').hidden = false; $('t-reset').setAttribute('aria-expanded', 'true'); $('reset-cancel').focus(); }
+  function closeConfirm(){ $('reset-confirm').hidden = true; $('t-reset').setAttribute('aria-expanded', 'false'); $('t-reset').focus(); }
+  function resetAll(){
+    stopAuto(); stopTicker(); clearTimeout(state.resolveTimer); clearTimeout(state.rfTimer);
+    state.sel = {}; PRESETS[0].ids.forEach(function(id){ state.sel[id] = true; }); state.ward = PRESETS[0].ward;
+    state.cmp = null; state.scan = null; state.res = null; state.del = null; state.log = [];
+    state.records = seedRecords(); state.recSel = null; state.recFilter = 'all';
+    $('reset-confirm').hidden = true; $('t-reset').setAttribute('aria-expanded', 'false');
+    closeClear(false);
+    goStep(1, { focus:true });
+    announce('已重新開始');
+  }
+
+  /* ================= wiring ================= */
+  document.addEventListener('click', function(e){
+    var t = e.target.closest('button');
+    if(!t) return;
+    if(t.getAttribute('aria-disabled') === 'true'){ e.preventDefault(); return; }
+    var v;
+    if((v = t.getAttribute('data-step'))){ goStep(+v); var sb = $('stepper').querySelector('[data-step="' + v + '"]'); if(sb) sb.focus({ preventScroll:true }); return; }
+    if((v = t.getAttribute('data-go'))){ goStep(+v, { focus:true }); return; }
+    if(t.classList.contains('drug')){ toggleDrug(t.getAttribute('data-id')); return; }
+    if((v = t.getAttribute('data-preset'))){ var pr = PRESETS.filter(function(p){ return p.key === v; })[0]; applyPreset(pr.ids, pr.ward); return; }
+    if((v = t.getAttribute('data-sim'))){ toggleSim(v); return; }
+    if((v = t.getAttribute('data-scan'))){ scanOne(v); return; }
+    if((v = t.getAttribute('data-sign'))){ sign(t.getAttribute('data-id'), v); return; }
+    if((v = t.getAttribute('data-cold'))){ coldAction(v, t.getAttribute('data-id')); return; }
+    if((v = t.getAttribute('data-rec'))){ selectRec(v); return; }
+    if((v = t.getAttribute('data-filter'))){ setFilter(v); return; }
+    switch(t.id){
+      case 'new-batch': newBatchFlow(); break;
+      case 'clear-open': if($('clear-confirm').hidden) openClear(); else closeClear(true); break;
+      case 'clear-cancel': closeClear(true); break;
+      case 'clear-go': clearPractice(false); break;
+      case 'clear-all': clearPractice(true); break;
+      case 'clear-basket': applyPreset([]); break;
+      case 'go-2': goStep(2, { focus:true }); break;
+      case 'scan-rest': scanRest(); break;
+      case 'rfid-go': rfidGo(); break;
+      case 'stage-next': stageNext(); break;
+      case 'stage-auto': toggleAuto(); break;
+      case 'stage-again': rescan(); break;
+      case 'release': release(); break;
+      case 'seal-go': sealBasket(); break;
+      case 'arrive-go': arrive(); break;
+      case 'receive-go': receive(); break;
+      case 'reject-go': reject(); break;
+      case 't-presenter': togglePresenter(); break;
+      case 't-full': toggleFull(); break;
+      case 't-reset': if($('reset-confirm').hidden) openConfirm(); else closeConfirm(); break;
+      case 'reset-cancel': closeConfirm(); break;
+      case 'reset-go': resetAll(); break;
+    }
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    var tag = (e.target.tagName || '').toLowerCase();
+    if(tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+    if(!$('reset-confirm').hidden){ if(e.key === 'Escape'){ e.preventDefault(); closeConfirm(); } return; }
+    if(!$('clear-confirm').hidden && e.key === 'Escape'){ e.preventDefault(); closeClear(true); return; }
+    if(e.key === 'ArrowRight'){ e.preventDefault(); goStep(state.step + 1, { focus:true }); }
+    else if(e.key === 'ArrowLeft'){ e.preventDefault(); goStep(state.step - 1, { focus:true }); }
+    else if(e.key === 'p' || e.key === 'P'){ togglePresenter(); }
+    else if(e.key === 'f' || e.key === 'F'){ toggleFull(); }
+  });
+  document.addEventListener('click', function(e){
+    var c = $('reset-confirm');
+    if(!c.hidden && !c.contains(e.target) && !$('t-reset').contains(e.target)){ c.hidden = true; $('t-reset').setAttribute('aria-expanded', 'false'); }
+  }, true);
+  /* whole batch row is clickable; the batch-id button inside it is the keyboard target */
+  document.addEventListener('click', function(e){
+    if(e.target.closest('button, a')) return;
+    var tr = e.target.closest('tr[data-rec]');
+    if(tr) selectRec(tr.getAttribute('data-rec'));
+  });
+  document.addEventListener('fullscreenchange', syncFull);
+  if(!document.fullscreenEnabled) $('t-full').hidden = true;
+
+  /* ================= boot ================= */
+  buildShelf();
+  PRESETS[0].ids.forEach(function(id){ state.sel[id] = true; }); state.ward = PRESETS[0].ward;
+  state.records = seedRecords();
+  try{ if(localStorage.getItem('rfidbox-presenter') === '1') setPresenter(true); }catch(e){}
+  var m = /^#step([1-6])$/.exec(location.hash || '');
+  goStep(m ? +m[1] : 1);
+})();
+</script>
+</body>
+</html>
