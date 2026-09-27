@@ -504,6 +504,16 @@
   /* ---------- seal ---------- */
   .cat-seal{ color:var(--accent); background:var(--accent-soft); border-color:color-mix(in srgb, var(--accent) 28%, transparent); }
 
+  /* ---------- compartment temperature logger (隔層記錄器) ---------- */
+  .logger-note{ display:flex; gap:8px; align-items:flex-start; margin:12px 0 0; padding:10px 12px; border-radius:10px; background:var(--cold-soft); color:var(--ink); font-size:.875rem; line-height:1.55; }
+  .logger-note .ic{ flex:none; margin-top:3px; }
+  .act.act-logger{ border-color:color-mix(in srgb, var(--cold) 45%, var(--line)); }
+  .act.act-logger[data-state="alert"]{ border-color:var(--risk); }
+  .logger-id{ font-family:var(--font-mono); font-size:.875rem; font-weight:600; color:var(--cold); }
+  .logger-in{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:0; font-size:.875rem; color:var(--ink-2); }
+  .logger-in .chip{ display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); font-size:.8125rem; color:var(--ink); }
+  .logger-in .chip.in{ border-color:color-mix(in srgb, var(--cold) 35%, transparent); background:var(--cold-soft); color:var(--cold); font-weight:600; }
+
   /* ---------- step 5: ward handoff (病房簽收) ---------- */
   .route{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; }
   @media (max-width:680px){ .route{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
@@ -700,8 +710,9 @@
           </div>
           <div class="track">
             <h3><svg class="ic" aria-hidden="true"><use href="#i-tag"/></svg>一次性單品標籤 <span class="aside" id="tr-tag-n"></span></h3>
-            <p>高風險管制藥與冷藏藥品逐支貼標，每一支都能單獨追溯。</p>
+            <p>高風險管制藥與冷藏藥品逐支貼標，每一支都能單獨追溯。標籤只負責身分（UID、批號、效期），不負責測溫。</p>
             <ul id="tr-tag"></ul>
+            <p class="logger-note" id="tr-logger" hidden></p>
           </div>
         </div>
       </section>
@@ -998,7 +1009,7 @@
   <footer class="foot">
     <p><b>概念示範：</b>本頁所有數值、辨識畫面與計時皆為模擬，不代表實體原型或實測結果。</p>
     <p>逐項掃描的單支秒數（5.4–6.8 秒）為本團隊模擬假設值，未引用特定文獻；「整籃感應 1 秒內」是本系統的設計目標，尚待原型驗證。</p>
-    <p>一般藥品的品項與數量正確性，由調劑端既有條碼核對與醫囑負責；感應箱讀取的是藥籃標籤，封籤用來確認出庫後未被開啟。冷藏藥品放入藥籃保冷隔層後，溫度由隔層記錄器全程記錄、異常即時示警，非逐支貼溫度標籤；封籤假設使用防拆 RFID 標籤；病房端讀取與轉運流程為系統規劃示意。</p>
+    <p>一般藥品的品項與數量正確性，由調劑端既有條碼核對與醫囑負責；感應箱讀取的是藥籃標籤，封籤用來確認出庫後未被開啟。冷藏藥品的單品標籤只負責身分，不測溫：離開冰箱到放入保冷隔層之間以 15 分鐘時限管控，放入後由每籃一個、可重複使用的隔層記錄器記錄隔層溫度、異常即時示警，非逐支貼溫度標籤；封籤假設使用防拆 RFID 標籤；病房端讀取與轉運流程為系統規劃示意。</p>
     <p>鍵盤：<kbd>←</kbd> <kbd>→</kbd> 切換步驟　<kbd>P</kbd> 講者模式　<kbd>F</kbd> 全螢幕</p>
   </footer>
 </div>
@@ -1197,6 +1208,10 @@
     $('tr-tag').innerHTML = tagged.length ? tagged.map(li).join('') : '<li class="none">這一批沒有需要單品標籤的藥品</li>';
     $('tr-basket-n').textContent = normals.length ? '1 枚標籤' : '0 枚標籤';
     $('tr-tag-n').textContent = tagged.length + ' 枚標籤';
+    var colds1 = items.filter(function(d){ return d.cat === 'cold'; });
+    var ln = $('tr-logger');
+    ln.hidden = !colds1.length;
+    ln.innerHTML = colds1.length ? icon('i-cold', 'c-cold') + '<span><b>冷藏藥品的溫度：</b>' + colds1.length + ' 項冷藏藥品放進同一個保冷隔層，由 <b>1 個隔層記錄器</b>監控溫度（隨藥籃重複使用），不逐支貼溫度標籤。</span>' : '';
     $('basket-aside').textContent = '目的地 ' + state.ward + ' 病房 · ' + items.length + ' 品項 · ' + tagCount(items) + ' 枚標籤';
     $('go-2').disabled = items.length === 0;
     $('s1-hint').textContent = items.length ? '' : '先選至少一項藥品。';
@@ -1489,18 +1504,25 @@
         var tag = sc.tags.filter(function(t){ return t.ids.indexOf(d.id) >= 0; })[0];
         var it = { epc:tag.epc, tagKind:tag.kind };
         if(d.cat === 'risk'){ it.signA = null; it.signB = null; }
-        if(d.cat === 'cold'){
-          it.left = COLD_LIMIT; it.status = 'monitoring'; it.fault = false; it.excursion = false; it.faultOccurred = false; it.peak = null; it.stored = null;
-          it.temp = 4.3 + Math.random() * 0.6; it.hist = []; it.all = [];
-          for(var k = 0; k < 16; k++){ stepTemp(it); }
-        }
+        /* cold items only carry a time limit here; temperature is measured by the basket's compartment logger */
+        if(d.cat === 'cold'){ it.left = COLD_LIMIT; it.status = 'monitoring'; it.stored = null; it.flag = false; }
         r.items[d.id] = it;
       });
-      state.res = r;
       var risks = items.filter(function(d){ return d.cat === 'risk'; });
       var colds = items.filter(function(d){ return d.cat === 'cold'; });
+      if(colds.length){
+        /* one reusable logger per basket compartment, shared by every cold item in it */
+        var lg = { id:'LOG-' + r.bsk.replace(/^BSK-/, ''), temp:4.2 + Math.random() * 0.5, hist:[], all:[], fault:false, excursion:false, faultOccurred:false, peak:null };
+        for(var k = 0; k < 16; k++){ stepTemp(lg); }
+        r.logger = lg;
+      }
+      state.res = r;
       if(risks.length) addLog('risk', names(risks) + ' 為高風險管制藥，放行前需兩位藥師簽核。');
-      if(colds.length){ addLog('info', names(colds) + ' 離開冰箱，需在 15 分鐘內放入藥籃保冷隔層，隔層記錄器將開始全程記錄溫度。'); startTicker(); }
+      if(colds.length){
+        addLog('info', names(colds) + ' 離開冰箱，開始 15 分鐘倒數，需在時限內放入藥籃保冷隔層。');
+        addLog('info', '藥籃 ' + r.bsk + ' 保冷隔層記錄器 ' + r.logger.id + ' 記錄中，目前隔層溫度 ' + r.logger.temp.toFixed(1) + '°C。');
+        startTicker();
+      }
     }
     return state.res;
   }
@@ -1514,12 +1536,17 @@
         reqs.push({ st:ok ? 'done' : 'todo', text:d.name + ' 雙人核對' + (ok ? '' : '（' + ((it.signA ? 1 : 0) + (it.signB ? 1 : 0)) + '/2）') });
         if(!ok) pending++;
       } else if(d.cat === 'cold'){
-        var done = coldDone(it), alarm = it.excursion || it.status === 'overdue';
-        var what = (it.status === 'overdue' || it.status === 'reviewed') ? ' 主管複核' : (it.excursion ? ' 溫度異常待排除' : ' 放入保冷隔層');
+        var done = coldDone(it), alarm = it.status === 'overdue';
+        var what = (it.status === 'overdue' || it.status === 'reviewed') ? ' 主管複核' : ' 放入保冷隔層';
         reqs.push({ st:done ? 'done' : (alarm ? 'alert' : 'todo'), text:d.name + what });
         if(!done) pending++;
       }
     });
+    if(r.logger){
+      var lgBad = loggerBad(r.logger);
+      reqs.push({ st:lgBad ? 'alert' : 'done', text:lgBad ? '保冷隔層溫度異常待排除' : '保冷隔層溫度正常（' + r.logger.id + '）' });
+      if(lgBad) pending++;
+    }
     var before = pending;   /* items that must be settled before the basket can be sealed */
     reqs.push({ st:r.seal ? 'done' : 'todo', text:r.seal ? '藥籃已封籤' : '藥籃封籤' });
     if(!r.seal) pending++;
@@ -1560,36 +1587,67 @@
       '<div class="signs">' + sb('A', '第一核對人', '藥師 A') + sb('B', '第二核對人', '藥師 B') + '</div>' +
     '</article>';
   }
-  function coldView(d, it, released){
-    var v = { card:'wait', pill:pill('live', '監控中'), msgCls:'', msg:'保冷隔層記錄器每秒記錄溫度，資料即時同步 HIS，溫度異常立即示警。', btns:'' };
+  function loggerBad(lg){ return !!(lg && (lg.fault || lg.excursion)); }
+  function coldView(d, it, released, lg){
+    var v = { card:'wait', pill:pill('wait', '倒數中'), msgCls:'', msg:'', btns:'' };
     if(it.status === 'stored'){
-      v.card = 'done'; v.pill = pill('ok', it.faultOccurred ? '已放入保冷隔層・需加註' : '已放入保冷隔層');
-      v.msgCls = 'ok'; v.msg = '離開冰箱 ' + it.stored + ' 後放入藥籃保冷隔層' + (it.faultOccurred ? '；過程曾發生溫度異常，紀錄已加註待複核。' : '，溫度在安全範圍內。') + '標籤會持續記錄到病房簽收。';
+      v.card = 'done'; v.pill = pill('ok', it.flag ? '已放入保冷隔層・需加註' : '已放入保冷隔層');
+      v.msgCls = 'ok'; v.msg = '離開冰箱 ' + it.stored + ' 後放入保冷隔層，之後由隔層記錄器 ' + lg.id + ' 監控溫度' + (it.flag ? '；放入後隔層曾發生溫度異常，紀錄已加註待複核。' : '。');
     } else if(it.status === 'reviewed'){
       v.card = 'done'; v.pill = pill('ok', '主管已複核');
       v.msgCls = 'ok'; v.msg = '冷鏈逾時已由主管複核，判定結果寫入紀錄。';
     } else if(it.status === 'overdue'){
       v.card = 'alert'; v.pill = pill('alert', '逾時未放入保冷');
-      v.msgCls = 'alert'; v.msg = '超過 15 分鐘冷鏈時限仍未放入保冷隔層，系統鎖住出庫，需主管複核這批藥品是否可用。';
+      v.msgCls = 'alert'; v.msg = '離開冰箱超過 15 分鐘仍未放入保冷隔層，系統鎖住出庫，需主管複核這批藥品是否可用。';
       v.btns = '<button type="button" class="btn btn-primary" data-cold="review" data-id="' + d.id + '" data-k="cold-review-' + d.id + '">主管複核完成</button>';
-    } else if(it.excursion){
-      v.card = 'alert'; v.pill = pill('alert', it.fault ? '溫度異常' : '溫度回降中');
-      v.msgCls = 'alert';
-      v.msg = it.fault
-        ? '溫度 ' + it.temp.toFixed(1) + '°C，超出 2–8°C。系統已亮紅燈、發出提示音並通知值班藥師；排除前不能放入保冷隔層。'
-        : '異常已處理，溫度正在回到安全範圍（目前 ' + it.temp.toFixed(1) + '°C）。';
-      v.btns = it.fault ? '<button type="button" class="btn btn-primary" data-cold="fix" data-id="' + d.id + '" data-k="cold-fix-' + d.id + '">已處理異常（移回保冷區）</button>' : '';
-    } else if(it.fault){
-      v.pill = pill('live', '溫度上升中');
-      v.msg = '模擬情境：藥品暫放在工作台上，沒有放回保冷區，溫度開始上升。看系統何時發現。';
-      v.btns = '<button type="button" class="btn btn-alarm" disabled>溫度上升中…</button>';
+    } else if(loggerBad(lg)){
+      v.msg = '保冷隔層溫度異常，排除前暫停放入藥品；倒數不會暫停，請先處理隔層。';
+      v.btns = '<button type="button" class="btn btn-primary" disabled>確認已放入保冷隔層</button>';
     } else {
-      if(it.faultOccurred) v.msg = '溫度已回到安全範圍。這支藥品曾發生溫度異常，紀錄會加註待複核。';
-      v.btns = '<button type="button" class="btn btn-alarm" data-cold="fault" data-id="' + d.id + '" data-k="cold-fault-' + d.id + '">' + icon('i-alert') + '模擬溫度異常</button>' +
-               '<button type="button" class="btn btn-primary" data-cold="store" data-id="' + d.id + '" data-k="cold-store-' + d.id + '">確認已放入保冷隔層</button>';
+      v.msg = '藥品還在隔層外，記錄器量不到，這段改用離開冰箱的時間倒數管控。放入隔層後就由記錄器接手。';
+      v.btns = '<button type="button" class="btn btn-primary" data-cold="store" data-id="' + d.id + '" data-k="cold-store-' + d.id + '">確認已放入保冷隔層</button>';
     }
     if(released) v.btns = '';
     return v;
+  }
+  function loggerView(lg, released){
+    var v = { card:'wait', pill:pill('live', '記錄中'), msgCls:'', msg:'記錄器量的是整個保冷隔層的溫度，隔層內的冷藏藥品共用這份紀錄；資料同步 HIS，超出 2–8°C 立即示警。', btns:'' };
+    if(lg.excursion){
+      v.card = 'alert'; v.pill = pill('alert', lg.fault ? '隔層溫度異常' : '溫度回降中'); v.msgCls = 'alert';
+      v.msg = lg.fault
+        ? '隔層溫度 ' + lg.temp.toFixed(1) + '°C，超出 2–8°C。系統已亮紅燈、發出提示音並通知值班藥師；排除前暫停放入藥品，也不能出庫。'
+        : '異常已處理，隔層溫度正在回到安全範圍（目前 ' + lg.temp.toFixed(1) + '°C）。';
+      v.btns = lg.fault ? '<button type="button" class="btn btn-primary" data-cold="lg-fix" data-id="logger" data-k="lg-fix">已處理（蓋緊隔層、更換冰寶）</button>' : '';
+    } else if(lg.fault){
+      v.pill = pill('live', '隔層升溫中');
+      v.msg = '模擬情境：保冷隔層蓋子沒蓋緊（或冰寶不足），隔層溫度開始上升。看記錄器何時發現。';
+      v.btns = '<button type="button" class="btn btn-alarm" disabled>隔層升溫中…</button>';
+    } else {
+      if(lg.faultOccurred) v.msg = '隔層溫度已回到安全範圍。異常期間已在隔層內的藥品，紀錄會加註待複核。';
+      v.btns = '<button type="button" class="btn btn-alarm" data-cold="lg-fault" data-id="logger" data-k="lg-fault">' + icon('i-alert') + '模擬隔層升溫（未蓋緊／冰寶不足）</button>';
+    }
+    if(released) v.btns = '';
+    return v;
+  }
+  function loggerInside(r){
+    return r.order.filter(function(id){ return BY_ID[id].cat === 'cold'; }).map(function(id){
+      var d = BY_ID[id], inside = r.items[id].status === 'stored';
+      return '<span class="chip' + (inside ? ' in' : '') + '">' + (inside ? icon('i-check') : '') + d.name + (inside ? '' : '（未放入）') + '</span>';
+    }).join('');
+  }
+  function loggerCard(r){
+    var lg = r.logger, v = loggerView(lg, r.released), out = lg.temp > SAFE_MAX || lg.temp < SAFE_MIN;
+    return '<article class="act act-logger" data-state="' + v.card + '" id="act-logger" tabindex="-1" aria-labelledby="actt-logger">' +
+      '<div class="act-head"><span class="cat cat-cold">' + icon('i-cold') + '保冷隔層記錄器</span>' + v.pill + '</div>' +
+      '<h4 id="actt-logger">隔層記錄器 <span class="logger-id">' + lg.id + '</span><span class="spec">藥籃 ' + r.bsk + ' · 每籃 1 個・隨藥籃重複使用</span></h4>' +
+      '<p class="logger-in" id="lg-in">隔層內：' + loggerInside(r) + '</p>' +
+      '<div class="cold-top">' +
+        '<div class="tnow"><span class="tv' + (out ? ' out' : '') + '" id="tv-logger">' + lg.temp.toFixed(1) + '°C</span><span class="tr">隔層溫度・安全範圍 2–8°C</span></div>' +
+        '<svg class="spark" id="sp-logger" viewBox="0 0 300 96" role="img" aria-label="保冷隔層近 45 次溫度讀數，綠色帶為 2 到 8°C 安全範圍">' + sparkInner(lg) + '</svg>' +
+      '</div>' +
+      '<p class="act-msg ' + v.msgCls + '" id="msg-logger">' + v.msg + '</p>' +
+      (v.btns ? '<div class="act-btns">' + v.btns + '</div>' : '') +
+    '</article>';
   }
   function sparkInner(it){
     var W = 300, y = function(t){ return 88 - t / T_MAX * 80; };
@@ -1614,15 +1672,11 @@
     var label = coldDone(it) ? '離開冰箱時限（已停止）' : (it.status === 'overdue' ? '離開冰箱時限已過' : '離開冰箱時限剩餘');
     return { pct:pct, cls:cls, label:label };
   }
-  function coldCard(d, it, released){
-    var v = coldView(d, it, released), cp = clockParts(it), out = it.temp > SAFE_MAX || it.temp < SAFE_MIN;
+  function coldCard(d, it, released, lg){
+    var v = coldView(d, it, released, lg), cp = clockParts(it);
     return '<article class="act" data-state="' + v.card + '" id="act-' + d.id + '" tabindex="-1" aria-labelledby="actt-' + d.id + '">' +
       '<div class="act-head">' + catChip('cold') + v.pill + '</div>' +
       '<h4 id="actt-' + d.id + '">' + d.name + ' <span class="spec">' + d.spec + ' · ×' + d.qty + '</span></h4>' +
-      '<div class="cold-top">' +
-        '<div class="tnow"><span class="tv' + (out ? ' out' : '') + '" id="tv-' + d.id + '">' + it.temp.toFixed(1) + '°C</span><span class="tr">安全範圍 2–8°C</span></div>' +
-        '<svg class="spark" id="sp-' + d.id + '" viewBox="0 0 300 96" role="img" aria-label="近 45 次溫度讀數趨勢，綠色帶為 2 到 8°C 安全範圍">' + sparkInner(it) + '</svg>' +
-      '</div>' +
       '<div class="clock">' +
         '<div class="clock-row"><span id="cll-' + d.id + '">' + cp.label + '</span><span class="mono" id="cl-' + d.id + '">' + mmss(it.left) + '</span></div>' +
         '<div class="clock-bar" aria-hidden="true"><i id="cb-' + d.id + '" class="' + cp.cls + '" style="width:' + cp.pct + '%"></i></div>' +
@@ -1654,7 +1708,11 @@
     r.order.forEach(function(id){
       var d = BY_ID[id], it = r.items[id];
       if(d.cat === 'risk'){ html += riskCard(d, it, r.released); n++; }
-      if(d.cat === 'cold'){ html += coldCard(d, it, r.released); n++; }
+    });
+    if(r.logger){ html += loggerCard(r); n++; }
+    r.order.forEach(function(id){
+      var d = BY_ID[id], it = r.items[id];
+      if(d.cat === 'cold'){ html += coldCard(d, it, r.released, r.logger); n++; }
     });
     html += sealCard(r); n++;
     $('acts').innerHTML = html;
@@ -1668,11 +1726,13 @@
       return n === 2 ? pill('ok', '雙人核對完成') : pill('wait', '待雙人核對 ' + n + '/2');
     }
     if(released) return pill('ok', '已出庫');
-    if(it.status === 'stored') return pill('ok', it.faultOccurred ? '已放入保冷・需加註' : '已放入保冷隔層');
+    if(it.status === 'stored'){
+      if(loggerBad(state.res.logger) && state.res.logger.excursion) return pill('alert', '隔層溫度異常');
+      return pill('ok', it.flag ? '已放入保冷・需加註' : '已放入保冷隔層');
+    }
     if(it.status === 'reviewed') return pill('ok', '主管已複核');
     if(it.status === 'overdue') return pill('alert', '逾時未放入保冷');
-    if(it.excursion) return pill('alert', '溫度異常');
-    return pill('live', '監控中 <span class="mono" id="tc-' + d.id + '">' + mmss(it.left) + '</span>');
+    return pill('wait', '倒數 <span class="mono" id="tc-' + d.id + '">' + mmss(it.left) + '</span>');
   }
   function renderTable(){
     var r = state.res;
@@ -1732,70 +1792,82 @@
   function tick(){
     var r = state.res;
     if(!r || r.released){ stopTicker(); return; }
-    var structural = false, active = false;
-    r.order.forEach(function(id){
-      var d = BY_ID[id]; if(d.cat !== 'cold') return;
-      var it = r.items[id];
-      if(coldDone(it)) return;
-      active = true;
-      stepTemp(it);
-      if(it.status === 'monitoring'){
-        it.left -= SPEEDUP;
-        if(it.left <= 0){
-          it.left = 0; it.status = 'overdue'; it.fault = false;
-          addLog('risk', d.name + ' 離開冰箱超過 15 分鐘仍未放入保冷隔層，出庫已鎖定，需主管複核。');
-          announce(d.name + ' 冷鏈逾時，需主管複核');
-          structural = true;
-        }
-      }
-      if(!it.excursion && it.temp > SAFE_MAX){
-        it.excursion = true; it.peak = it.temp;
-        addLog('risk', d.name + ' 溫度 ' + it.temp.toFixed(1) + '°C 超出 2–8°C，已亮紅燈、發出提示音並通知值班藥師。');
-        announce('警示：' + d.name + ' 溫度 ' + it.temp.toFixed(1) + ' 度，超出安全範圍');
+    var lg = r.logger;
+    if(!lg){ stopTicker(); return; }
+    var structural = false;
+    function coldIds(){ return r.order.filter(function(id){ return BY_ID[id].cat === 'cold'; }); }
+    /* the logger keeps recording the compartment until the basket leaves the pharmacy */
+    stepTemp(lg);
+    coldIds().forEach(function(id){
+      var d = BY_ID[id], it = r.items[id];
+      if(it.status !== 'monitoring') return;
+      it.left -= SPEEDUP;
+      if(it.left <= 0){
+        it.left = 0; it.status = 'overdue';
+        addLog('risk', d.name + ' 離開冰箱超過 15 分鐘仍未放入保冷隔層，出庫已鎖定，需主管複核。');
+        announce(d.name + ' 冷鏈逾時，需主管複核');
         structural = true;
-      } else if(it.excursion){
-        it.peak = Math.max(it.peak, it.temp);
-        if(!it.fault && it.temp <= SAFE_MAX - 0.6){
-          it.excursion = false; it.faultOccurred = true;
-          addLog('ok', d.name + ' 溫度回到安全範圍（' + it.temp.toFixed(1) + '°C，最高曾達 ' + it.peak.toFixed(1) + '°C），紀錄需加註複核。');
-          announce(d.name + ' 溫度已回到安全範圍');
-          structural = true;
-        }
       }
     });
+    var inside = coldIds().filter(function(id){ return r.items[id].status === 'stored'; }).map(function(id){ return BY_ID[id]; });
+    if(!lg.excursion && lg.temp > SAFE_MAX){
+      lg.excursion = true; lg.peak = lg.temp;
+      inside.forEach(function(d){ r.items[d.id].flag = true; });
+      addLog('risk', '隔層記錄器 ' + lg.id + ' 偵測隔層溫度 ' + lg.temp.toFixed(1) + '°C 超出 2–8°C，已亮紅燈、發出提示音並通知值班藥師' + (inside.length ? '（隔層內：' + names(inside) + '）' : '') + '。');
+      announce('警示：保冷隔層溫度 ' + lg.temp.toFixed(1) + ' 度，超出安全範圍');
+      structural = true;
+    } else if(lg.excursion){
+      lg.peak = Math.max(lg.peak, lg.temp);
+      if(!lg.fault && lg.temp <= SAFE_MAX - 0.6){
+        lg.excursion = false; lg.faultOccurred = true;
+        var flagged = inside.filter(function(d){ return r.items[d.id].flag; });
+        addLog('ok', '保冷隔層溫度回到安全範圍（' + lg.temp.toFixed(1) + '°C，最高曾達 ' + lg.peak.toFixed(1) + '°C）' + (flagged.length ? '，' + names(flagged) + ' 紀錄需加註複核。' : '。'));
+        announce('保冷隔層溫度已回到安全範圍');
+        structural = true;
+      }
+    }
     if(structural) rerender4();
     else if(state.step === 4) updateColdLive();
     else if(state.step === 6) renderRecords();
-    if(!active) stopTicker();
   }
   function updateColdLive(){
-    var r = state.res; if(!r) return;
+    var r = state.res; if(!r || !r.logger) return;
+    var lg = r.logger, tv = $('tv-logger');
+    if(tv){
+      var out = lg.temp > SAFE_MAX || lg.temp < SAFE_MIN;
+      tv.textContent = lg.temp.toFixed(1) + '°C'; tv.classList.toggle('out', out);
+      $('sp-logger').innerHTML = sparkInner(lg);
+      if(lg.excursion){ var lm = $('msg-logger'); if(lm) lm.textContent = loggerView(lg, false).msg; }
+    }
     r.order.forEach(function(id){
       var d = BY_ID[id]; if(d.cat !== 'cold') return;
-      var it = r.items[id], out = it.temp > SAFE_MAX || it.temp < SAFE_MIN;
-      var tv = $('tv-' + id); if(!tv) return;
-      tv.textContent = it.temp.toFixed(1) + '°C'; tv.classList.toggle('out', out);
-      $('sp-' + id).innerHTML = sparkInner(it);
+      var it = r.items[id], cl = $('cl-' + id); if(!cl) return;
       var cp = clockParts(it);
-      $('cl-' + id).textContent = mmss(it.left);
+      cl.textContent = mmss(it.left);
       $('cll-' + id).textContent = cp.label;
       var bar = $('cb-' + id); bar.style.width = cp.pct + '%'; bar.className = cp.cls;
       var tc = $('tc-' + id); if(tc) tc.textContent = mmss(it.left);
-      if(it.excursion){ var m = $('msg-' + id); if(m) m.textContent = coldView(d, it, false).msg; }
     });
   }
   function coldAction(kind, id){
     var r = state.res; if(!r || r.released) return;
+    var lg = r.logger;
+    if(kind === 'lg-fault'){
+      if(!lg || lg.fault || lg.excursion) return;
+      lg.fault = true;
+      addLog('warn', '模擬情境：藥籃 ' + r.bsk + ' 保冷隔層蓋子沒蓋緊，隔層溫度開始上升。');
+      rerender4(); return;
+    }
+    if(kind === 'lg-fix'){
+      if(!lg || !lg.fault) return;
+      lg.fault = false;
+      addLog('info', '隔層異常已處理（蓋緊隔層、更換冰寶），等待溫度回到安全範圍。');
+      rerender4(); return;
+    }
     var d = BY_ID[id], it = r.items[id];
-    if(kind === 'fault' && it.status === 'monitoring' && !it.fault){
-      it.fault = true;
-      addLog('warn', '模擬情境：' + d.name + ' 暫放在工作台上，沒有放回保冷區。');
-    } else if(kind === 'fix' && it.fault){
-      it.fault = false;
-      addLog('info', d.name + ' 異常已處理（移回保冷區），等待溫度回到安全範圍。');
-    } else if(kind === 'store' && it.status === 'monitoring' && !it.fault && !it.excursion){
+    if(kind === 'store' && it.status === 'monitoring' && !loggerBad(lg)){
       it.status = 'stored'; it.stored = mmss(COLD_LIMIT - it.left);
-      addLog('ok', d.name + ' 已放入藥籃保冷隔層（離開冰箱 ' + it.stored + '）' + (it.faultOccurred ? '，紀錄加註：曾發生溫度異常。' : '，溫度正常。'));
+      addLog('ok', d.name + ' 已放入藥籃保冷隔層（離開冰箱 ' + it.stored + '），改由隔層記錄器 ' + lg.id + ' 監控溫度。');
       announce(d.name + ' 已放入保冷隔層');
     } else if(kind === 'review' && it.status === 'overdue'){
       it.status = 'reviewed';
@@ -1885,19 +1957,23 @@
         checks.push({ key:'uid', id:d.id, name:d.name, cat:'risk', ok:!swap,
           text: swap ? '讀到 UID ' + shortEpc(del.readUid[d.id]) + '，出庫時是 ' + shortEpc(it.epc) + '，不是同一支。'
                      : 'UID ' + shortEpc(it.epc) + ' 與出庫時相同，是同一支。' });
-      } else if(d.cat === 'cold'){
-        var last = it.all.length ? it.all[it.all.length - 1] : 4.6;
-        var temps = transitTemps(Math.min(last, 7), sim.temp);
-        del.transit[d.id] = temps;
-        var s = tempStats(temps);
-        checks.push({ key:'temp', id:d.id, name:d.name, cat:'cold', ok:s.over === 0, temps:temps,
-          text: s.over === 0 ? '轉運途中 ' + s.n + ' 筆讀數，' + s.min.toFixed(1) + '–' + s.max.toFixed(1) + '°C，全程在 2–8°C。'
-                             : '轉運途中 ' + s.over + ' 筆超出 2–8°C，最高 ' + s.max.toFixed(1) + '°C。' });
       }
     });
+    if(r.logger){
+      /* one reading set for the whole compartment, uploaded by the logger at the ward */
+      var lg = r.logger, colds = items.filter(function(d){ return d.cat === 'cold'; });
+      var last = lg.all.length ? lg.all[lg.all.length - 1] : 4.6;
+      var temps = transitTemps(Math.min(last, 7), sim.temp);
+      del.transit.logger = temps;
+      var s = tempStats(temps);
+      checks.push({ key:'temp', name:'保冷隔層溫度', cat:'cold', ok:s.over === 0, temps:temps,
+        text: '隔層記錄器 ' + lg.id + '（隔層內 ' + names(colds) + '）：' +
+              (s.over === 0 ? '轉運途中 ' + s.n + ' 筆讀數，' + s.min.toFixed(1) + '–' + s.max.toFixed(1) + '°C，全程在 2–8°C。'
+                            : '轉運途中 ' + s.over + ' 筆超出 2–8°C，最高 ' + s.max.toFixed(1) + '°C，隔層內藥品全部不能簽收。') });
+    }
     del.checks = checks;
     var bad = checks.filter(function(c){ return !c.ok; });
-    if(bad.length){ bad.forEach(function(c){ addLog('risk', '病房端核對異常：' + (c.cat ? c.name + ' ' : '') + c.text); }); }
+    if(bad.length){ bad.forEach(function(c){ addLog('risk', '病房端核對異常：' + (c.cat && c.key !== 'temp' ? c.name + ' ' : '') + c.text); }); }
     else addLog('ok', '病房端核對全部通過：送對病房、封籤完整' + (items.some(function(d){ return d.cat === 'risk'; }) ? '、管制藥 UID 相符' : '') + (items.some(function(d){ return d.cat === 'cold'; }) ? '、冷鏈正常' : '') + '。');
     upsertRecord(buildSnapshot(state.scan, r, false));
     announce(bad.length ? '病房端發現 ' + bad.length + ' 項異常，不能簽收' : '病房端核對全部通過，可以簽收');
@@ -1989,7 +2065,8 @@
       var normals = countCat(items, 'normal');
       var tags = '<li><span class="epc">' + shortEpc(r.seal.epc) + '</span><span class="what">防拆封籤 · ' + r.bsk + '</span></li>';
       if(normals){ var bt = r.items[items.filter(function(d){ return d.cat === 'normal'; })[0].id]; tags += '<li><span class="epc">' + shortEpc(bt.epc) + '</span><span class="what">藥籃標籤 · 依醫囑 ' + normals + ' 項一般藥品</span></li>'; }
-      items.forEach(function(d){ if(d.cat !== 'normal') tags += '<li><span class="epc">' + shortEpc(r.items[d.id].epc) + '</span><span class="what">' + d.name + (d.cat === 'cold' ? ' · 溫度記錄中' : '') + '</span></li>'; });
+      items.forEach(function(d){ if(d.cat !== 'normal') tags += '<li><span class="epc">' + shortEpc(r.items[d.id].epc) + '</span><span class="what">' + d.name + (d.cat === 'cold' ? ' · 放在保冷隔層' : '') + '</span></li>'; });
+      if(r.logger) tags += '<li><span class="epc">' + r.logger.id + '</span><span class="what">隔層記錄器 · 送達時上傳轉運途中溫度</span></li>';
       html = '<h3 class="col-title">出庫時記錄的標籤</h3>' +
         '<div class="readout"><p class="note" style="margin:0">病房端讀取時，會逐一比對這些標籤。</p><ul class="tag-list">' + tags + '</ul></div>' +
         '<div class="sim"><h4>情境模擬（選用）</h4><p>選擇要模擬的異常，再按「送達病房，感應讀取」，看病房端會不會發現。不選就是正常送達。</p><div class="row">' +
@@ -2081,21 +2158,24 @@
       } else if(!it){
         row.st = { k:'wait', text:'未開始監控' }; row.note = tempNote(null);
       } else {
-        var tr = del && del.transit[id] ? del.transit[id] : [];
-        row.temps = it.all.concat(tr);
-        row.anomaly = !!(it.faultOccurred || it.excursion || it.status === 'overdue' || it.status === 'reviewed');
-        if(it.status === 'stored') row.st = { k:'ok', text:it.faultOccurred ? '已放入保冷（曾異常）' : '已放入保冷隔層' };
+        var lg = r.logger, stored = it.status === 'stored';
+        var tr = del && del.transit.logger ? del.transit.logger : [];
+        row.temps = stored && lg ? lg.all.concat(tr) : null;
+        row.anomaly = !!(it.flag || it.status === 'overdue' || it.status === 'reviewed');
+        if(stored && lg.excursion && !released) row.st = { k:'alert', text:'隔層溫度異常' };
+        else if(stored) row.st = { k:'ok', text:it.flag ? '已放入保冷（隔層曾異常）' : '已放入保冷隔層' };
         else if(it.status === 'reviewed') row.st = { k:'ok', text:'主管已複核' };
         else if(it.status === 'overdue') row.st = { k:'alert', text:'逾時未放入保冷' };
-        else if(it.excursion) row.st = { k:'alert', text:'溫度異常' };
-        else row.st = { k:'live', text:'監控中 ' + mmss(it.left) };
-        var tc = chk('temp', id);
-        if(tc && !tc.ok){ row.anomaly = true; row.st = { k:'alert', text:'轉運途中超溫' }; }
-        else if(tc && del.stage === 'received') row.st = { k:'ok', text:it.faultOccurred ? '已送達（藥局端曾異常）' : '已送達・冷鏈正常' };
-        var extra = it.status === 'stored' ? '離開冰箱 <span class="mono">' + it.stored + '</span>'
+        else row.st = { k:'wait', text:'倒數中 ' + mmss(it.left) };
+        var tc = chk('temp');
+        if(tc && !tc.ok){ row.anomaly = true; row.st = { k:'alert', text:'轉運途中隔層超溫' }; }
+        else if(tc && del.stage === 'received') row.st = { k:'ok', text:it.flag ? '已送達（藥局端隔層曾異常）' : '已送達・冷鏈正常' };
+        var extra = stored ? '離開冰箱 <span class="mono">' + it.stored + '</span> 放入隔層'
           : ((it.status === 'overdue' || it.status === 'reviewed') ? '<b class="c-risk">冷鏈逾時</b>' : '');
         if(tr.length) extra += (extra ? ' · ' : '') + '含轉運 ' + tr.length + ' 筆';
-        row.note = tempNote(row.temps, extra);
+        row.note = stored
+          ? tempNote(row.temps, extra) + '<br>隔層記錄器 <span class="mono">' + lg.id + '</span>（本籃冷藏藥品共用）'
+          : '<span class="dim">尚未放入保冷隔層</span>' + (extra ? ' · ' + extra : '');
       }
       if(voided) row.st = { k:'void', text:'已作廢' };
       return row;
@@ -2192,7 +2272,7 @@
     var back = pk; while(temps[back] > SAFE_MAX - 0.6) back++;
     var peak = temps[pk];
     for(i = 0; i < 36; i++){ temps.push(Math.round((4.4 + (rnd() - 0.5) * 0.9) * 10) / 10); }   /* transit readings, all in range */
-    var rowC = row('vac', epc(), { k:'ok', text:'已送達（藥局端曾異常）' }, tempNote(temps, '離開冰箱 <span class="mono">13:00</span> · 含轉運 36 筆'));
+    var rowC = row('vac', epc(), { k:'ok', text:'已送達（藥局端隔層曾異常）' }, tempNote(temps, '離開冰箱 <span class="mono">03:40</span> 放入隔層 · 含轉運 36 筆') + '<br>隔層記錄器 <span class="mono">LOG-207</span>（本籃冷藏藥品共用）');
     rowC.temps = temps; rowC.anomaly = true;
     var tOut = tB + 95000, tRead = tB + 95000 + 11 * 60000;
     var B = {
@@ -2206,14 +2286,15 @@
       audit:[
         { t:at(tB), kind:'info', text:'批次 ' + bB + '（7A 病房醫囑，BSK-207）感應完成：解析 3 枚標籤、3 品項（模擬 0.76 秒），已同步 HIS。' },
         { t:at(tB + 2000), kind:'risk', text:'Morphine 為高風險管制藥，放行前需兩位藥師簽核。' },
-        { t:at(tB + 2000), kind:'info', text:'Vaccine 離開冰箱，需在 15 分鐘內放入藥籃保冷隔層，隔層記錄器開始全程記錄溫度。' },
-        { t:at(sec(34)), kind:'warn', text:'Vaccine 暫放在工作台上，沒有放回保冷區，溫度開始上升。' },
-        { t:at(sec(up)), kind:'risk', text:'Vaccine 溫度 ' + temps[up].toFixed(1) + '°C 超出 2–8°C，已亮紅燈、發出提示音並通知值班藥師。' },
-        { t:at(sec(pk)), kind:'info', text:'Vaccine 異常已處理（移回保冷區），等待溫度回到安全範圍。' },
-        { t:at(sec(back)), kind:'ok', text:'Vaccine 溫度回到安全範圍（' + temps[back].toFixed(1) + '°C，最高曾達 ' + peak.toFixed(1) + '°C），紀錄需加註複核。' },
+        { t:at(tB + 2000), kind:'info', text:'Vaccine 離開冰箱，開始 15 分鐘倒數，需在時限內放入藥籃保冷隔層。' },
+        { t:at(tB + 2000), kind:'info', text:'藥籃 BSK-207 保冷隔層記錄器 LOG-207 記錄中，目前隔層溫度 ' + temps[16].toFixed(1) + '°C。' },
+        { t:at(sec(24)), kind:'ok', text:'Vaccine 已放入藥籃保冷隔層（離開冰箱 03:40），改由隔層記錄器 LOG-207 監控溫度。' },
+        { t:at(sec(34)), kind:'warn', text:'藥籃 BSK-207 保冷隔層蓋子沒蓋緊，隔層溫度開始上升。' },
+        { t:at(sec(up)), kind:'risk', text:'隔層記錄器 LOG-207 偵測隔層溫度 ' + temps[up].toFixed(1) + '°C 超出 2–8°C，已亮紅燈、發出提示音並通知值班藥師（隔層內：Vaccine）。' },
+        { t:at(sec(pk)), kind:'info', text:'隔層異常已處理（蓋緊隔層、更換冰寶），等待溫度回到安全範圍。' },
+        { t:at(sec(back)), kind:'ok', text:'保冷隔層溫度回到安全範圍（' + temps[back].toFixed(1) + '°C，最高曾達 ' + peak.toFixed(1) + '°C），Vaccine 紀錄需加註複核。' },
         { t:at(tB + 52000), kind:'info', text:'Morphine 第一核對人藥師 A 已簽核。' },
         { t:at(tB + 71000), kind:'ok', text:'Morphine 完成雙人核對（藥師 A、藥師 B）。' },
-        { t:at(tB + 80000), kind:'ok', text:'Vaccine 已放入藥籃保冷隔層（離開冰箱 13:00），紀錄加註：曾發生溫度異常。' },
         { t:at(tB + 88000), kind:'ok', text:'藥籃 BSK-207 已貼上防拆封籤（' + shortEpc(sealB) + '），封籤後內容不得再變動。' },
         { t:at(tOut), kind:'ok', text:'批次 ' + bB + ' 出庫，3 品項的核對紀錄已同步 HIS。' },
         { t:at(tOut), kind:'info', text:'藥籃 BSK-207 交給傳送人員 A，目的地 7A 病房。' },
